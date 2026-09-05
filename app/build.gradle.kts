@@ -25,6 +25,17 @@ fun getGitHash(): String {
     }
 }
 
+val supportedAbis = listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+val buildAbis = providers.gradleProperty("buildAbis")
+    .orNull
+    ?.split(",")
+    ?.map { it.trim() }
+    ?.filter { it.isNotEmpty() }
+    ?: supportedAbis
+require(buildAbis.isNotEmpty() && buildAbis.all { it in supportedAbis }) {
+    "buildAbis must contain only: ${supportedAbis.joinToString(", ")}"
+}
+
 // 获取构建时间已移除：构建时刻会写入 BuildConfig 进而进入 classes.dex，
 // 破坏 F-Droid 可复现构建（不同环境构建时间不同导致产物不一致）。
 
@@ -41,7 +52,7 @@ android {
 
     defaultConfig {
         applicationId = "com.kingzcheung.xime"
-        minSdk = 28
+        minSdk = 27
         targetSdk = 35
         versionCode = 20260828
         versionName = "2.7.2"
@@ -51,7 +62,7 @@ android {
 
         // NDK 配置
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            abiFilters += buildAbis
         }
 
         // 构建信息
@@ -150,10 +161,12 @@ android {
     // 分架构打包
     splits {
         abi {
-            isEnable = true
+            isEnable = buildAbis.size > 1
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = true
+            if (buildAbis.size > 1) {
+                include(*buildAbis.toTypedArray())
+            }
+            isUniversalApk = buildAbis.size > 1
         }
     }
 }
@@ -161,7 +174,9 @@ android {
 android.applicationVariants.all {
     val appName = "Xime"
     outputs.all {
-        val abi = filters.find { it.filterType.toString() == "ABI" }?.identifier ?: "universal"
+        val abi = filters.find { it.filterType.toString() == "ABI" }?.identifier
+            ?: buildAbis.singleOrNull()
+            ?: "universal"
         (this as BaseVariantOutputImpl).outputFileName = "$appName-$versionName-$abi.apk"
     }
 }
