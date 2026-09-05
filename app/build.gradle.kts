@@ -4,10 +4,17 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
+    id("com.chaquo.python")
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+}
+
+chaquopy {
+    defaultConfig {
+        version = "3.11"
+    }
 }
 
 apply(from = "build-logic/tasks-native.gradle.kts")
