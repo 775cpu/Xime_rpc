@@ -31,10 +31,8 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
         val pendingEnglish = service.candidateState.value.pendingEnglishText
 
         val (filteredTexts, filteredComments) = if (isAsciiMode) {
-            val filtered = candidatesWithComments.filterNot { candidate ->
-                candidate.text.any { it.code in 0x4E00..0x9FFF }
-            }
-            filtered.map { it.text } to filtered.map { it.comment }
+            // 英语模式每个按键直接上屏，不展示 Rime 候选或英语联想。
+            emptyList<String>() to emptyList()
         } else {
             candidatesWithComments.map { it.text } to candidatesWithComments.map { it.comment }
         }
@@ -91,7 +89,7 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
         }
         service.uiState.value = service.uiState.value.copy(isAsciiMode = isAsciiMode)
 
-        if (pendingEnglish.isNotEmpty()) {
+        if (!isAsciiMode && pendingEnglish.isNotEmpty()) {
             service.serviceScope.launch {
                 val candidates = service.predictionManager.getEnglishAssociations(pendingEnglish, PredictionManager.MAX_ASSOCIATION_COUNT)
                 withContext(Dispatchers.Main) {

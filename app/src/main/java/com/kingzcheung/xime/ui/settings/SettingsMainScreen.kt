@@ -66,6 +66,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.withFrameNanos
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.util.RpcUiController
 import kotlinx.coroutines.Dispatchers
@@ -418,10 +419,14 @@ private fun InlineLogView() {
             }
             if (content != logText) {
                 logText = content
-                scrollState.scrollTo(scrollState.maxValue)
             }
             delay(1000)
         }
+    }
+
+    LaunchedEffect(logText, logHeight) {
+        withFrameNanos { }
+        scrollState.scrollTo(scrollState.maxValue)
     }
 
     Column(
