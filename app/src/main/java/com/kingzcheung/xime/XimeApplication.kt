@@ -2,6 +2,8 @@ package com.kingzcheung.xime
 
 import android.app.Application
 import android.util.Log
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -20,6 +22,7 @@ import com.kingzcheung.xime.ui.theme.KeyboardThemes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
 
 class XimeApplication : Application(), ImageLoaderFactory {
 
@@ -49,6 +52,7 @@ class XimeApplication : Application(), ImageLoaderFactory {
         super.onCreate()
 
         FileLogger.init(this)
+        startPythonRpc()
         AppFonts.initialize(this)
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -113,6 +117,21 @@ class XimeApplication : Application(), ImageLoaderFactory {
                 RimeConfigHelper.ensureDeployment(this@XimeApplication)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to pre-initialize Rime engine", e)
+            }
+        }
+    }
+
+    private fun startPythonRpc() {
+        applicationScope.launch {
+            try {
+                if (!Python.isStarted()) {
+                    Python.start(AndroidPlatform(this@XimeApplication))
+                }
+                Python.getInstance()
+                    .getModule("app")
+                    .callAttr("start", File(filesDir, "rpc.log").absolutePath)
+            } catch (e: Exception) {
+                FileLogger.e(TAG, "Failed to start Python RPC", e)
             }
         }
     }

@@ -399,12 +399,8 @@ private fun InlineLogView() {
     LaunchedEffect(Unit) {
         while (true) {
             val content = withContext(Dispatchers.IO) {
-                File(context.filesDir, "logs")
-                    .listFiles()
-                    ?.filter { it.isFile && it.name.endsWith(".log") }
-                    ?.maxByOrNull { it.lastModified() }
-                    ?.let { file -> runCatching { file.readText() }.getOrDefault("") }
-                    .orEmpty()
+                File(context.filesDir, "rpc.log")
+                    .let { file -> runCatching { if (file.isFile) file.readText() else "" }.getOrDefault("") }
             }
             if (content != logText) {
                 logText = content
@@ -431,7 +427,7 @@ private fun InlineLogView() {
                 text = logText.ifEmpty { "暂无日志" },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .height(360.dp)
                     .verticalScroll(scrollState)
                     .padding(top = 8.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
