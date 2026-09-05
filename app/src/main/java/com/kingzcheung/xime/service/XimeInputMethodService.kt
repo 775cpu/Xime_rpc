@@ -454,7 +454,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         
         serviceScope.launch(Dispatchers.IO) {
             try {
-                initClipboardManager()
+                withContext(Dispatchers.Main) {
+                    initClipboardManager()
+                }
                 initAssociationEngine()
                 initSpeechRecognition()
 

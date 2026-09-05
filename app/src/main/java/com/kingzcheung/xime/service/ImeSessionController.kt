@@ -212,7 +212,9 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
     internal fun updateSchemaName() {
         val context = service
         service.serviceScope.launch(Dispatchers.IO) {
-            val page = service.keyboardViewModel.page.value
+            val page = withContext(Dispatchers.Main) {
+                service.keyboardViewModel.page.value
+            }
             val isHandwritingMode = (page as? com.kingzcheung.xime.keyboard.KeyboardPage.Main)?.type == com.kingzcheung.xime.keyboard.MainType.HANDWRITING
             val engineSchemaId = service.rimeEngine.getCurrentSchema()
             // session 未就绪时 getCurrentSchema() 返回空串：用持久化方案兜底，

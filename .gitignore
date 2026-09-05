@@ -36,6 +36,7 @@ app/release
 *.tar.gz
 *.zip
 /.agents
+Chaquopy/
 # Association model weights (large files, manually placed)
 app/src/main/assets/association_model
 
