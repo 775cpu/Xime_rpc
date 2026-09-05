@@ -11,6 +11,7 @@ import coil.memory.MemoryCache
 import com.kingzcheung.xime.plugin.ExtensionManager
 import com.kingzcheung.xime.plugin.PluginConfigStoreImpl
 import com.kingzcheung.xime.util.FileLogger
+import com.kingzcheung.xime.util.RpcUiController
 import com.kingzcheung.xime.plugin.core.runtime.PluginManager
 import com.kingzcheung.xime.rime.RimeConfigHelper
 import com.kingzcheung.xime.model.ModelRuntime
@@ -52,6 +53,7 @@ class XimeApplication : Application(), ImageLoaderFactory {
         super.onCreate()
 
         FileLogger.init(this)
+        RpcUiController.initialize(this)
         startPythonRpc()
         AppFonts.initialize(this)
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
