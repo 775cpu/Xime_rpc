@@ -53,6 +53,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,6 +67,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.kingzcheung.xime.settings.SettingsPreferences
+import com.kingzcheung.xime.util.RpcUiController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -395,6 +397,18 @@ private fun InlineLogView() {
     val context = LocalContext.current
     var logText by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
+    val uiState = RpcUiController.state.collectAsState().value
+    val logVisible = uiState["log.visible"]?.toBooleanStrictOrNull() ?: true
+    val logHeight = uiState["log.height.dp"]
+        ?.toFloatOrNull()
+        ?.coerceIn(120f, 1000f)
+        ?.dp
+        ?: 360.dp
+    val logBackground = uiState["log.background"]
+        ?.let { value -> runCatching { Color(android.graphics.Color.parseColor(value)) }.getOrNull() }
+        ?: MaterialTheme.colorScheme.surfaceVariant
+
+    if (!logVisible) return
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -414,7 +428,7 @@ private fun InlineLogView() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(logBackground)
             .padding(12.dp)
     ) {
         Text(
@@ -427,7 +441,7 @@ private fun InlineLogView() {
                 text = logText.ifEmpty { "暂无日志" },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(360.dp)
+                    .height(logHeight)
                     .verticalScroll(scrollState)
                     .padding(top = 8.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
