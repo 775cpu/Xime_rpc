@@ -52,6 +52,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedButton
@@ -74,6 +75,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.kingzcheung.xime.settings.SettingsPreferences
+import com.kingzcheung.xime.service.BackgroundCaptureService
 import com.kingzcheung.xime.util.RpcUiController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -407,6 +409,12 @@ fun SettingsMainContent(
 private fun PermissionRequestPanel() {
     val context = LocalContext.current
     val activity = context as? Activity ?: return
+    var backgroundEnabled by remember {
+        mutableStateOf(SettingsPreferences.isBackgroundCaptureEnabled(context))
+    }
+    var wakeLockEnabled by remember {
+        mutableStateOf(SettingsPreferences.isBackgroundCaptureWakeLockEnabled(context))
+    }
     val requests = listOf(
         "相机" to listOf(Manifest.permission.CAMERA),
         "麦克风" to listOf(Manifest.permission.RECORD_AUDIO),
@@ -421,6 +429,54 @@ private fun PermissionRequestPanel() {
         "旧版存储" to listOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
     )
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("后台相机/麦克风/RPC")
+                Text(
+                    "显示常驻通知后允许后台调用；默认关闭",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = backgroundEnabled,
+                onCheckedChange = { enabled ->
+                    backgroundEnabled = enabled
+                    SettingsPreferences.setBackgroundCaptureEnabled(context, enabled)
+                    BackgroundCaptureService.setEnabled(
+                        context,
+                        enabled,
+                        wakeLockEnabled
+                    )
+                }
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("保持 CPU 唤醒")
+                Text(
+                    "PARTIAL_WAKE_LOCK，可能增加耗电；默认关闭",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = wakeLockEnabled,
+                onCheckedChange = { enabled ->
+                    wakeLockEnabled = enabled
+                    SettingsPreferences.setBackgroundCaptureWakeLockEnabled(context, enabled)
+                    if (backgroundEnabled) {
+                        BackgroundCaptureService.setEnabled(context, true, enabled)
+                    }
+                }
+            )
+        }
         Text("动态权限", style = MaterialTheme.typography.labelLarge)
         Text(
             "点击后由 Android 系统弹窗确认；灰色按钮表示当前版本不适用。",

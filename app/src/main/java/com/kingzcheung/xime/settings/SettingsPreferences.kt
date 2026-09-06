@@ -602,6 +602,22 @@ object SettingsPreferences {
 
     const val KEY_CLIPBOARD_SYNC_ENABLED = "clipboard_sync_enabled"
     const val KEY_CLIPBOARD_SYNC_PLUGIN_ID = "clipboard_sync_plugin_id"
+    const val KEY_BACKGROUND_CAPTURE_ENABLED = "background_capture_enabled"
+    const val KEY_BACKGROUND_CAPTURE_WAKE_LOCK = "background_capture_wake_lock"
+
+    fun isBackgroundCaptureEnabled(context: Context): Boolean =
+        getPrefs(context).getBoolean(KEY_BACKGROUND_CAPTURE_ENABLED, false)
+
+    fun setBackgroundCaptureEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_BACKGROUND_CAPTURE_ENABLED, enabled).apply()
+    }
+
+    fun isBackgroundCaptureWakeLockEnabled(context: Context): Boolean =
+        getPrefs(context).getBoolean(KEY_BACKGROUND_CAPTURE_WAKE_LOCK, false)
+
+    fun setBackgroundCaptureWakeLockEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_BACKGROUND_CAPTURE_WAKE_LOCK, enabled).apply()
+    }
 
     fun isClipboardSyncEnabled(context: Context): Boolean {
         return getPrefs(context).getBoolean(KEY_CLIPBOARD_SYNC_ENABLED, false)

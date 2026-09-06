@@ -102,6 +102,11 @@
             android:name=".service.AsrInferenceService"
             android:exported="false"
             android:process=":asr" />
+
+        <service
+            android:name=".service.BackgroundCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="camera|microphone|location|mediaPlayback" />
         
     </application>
 

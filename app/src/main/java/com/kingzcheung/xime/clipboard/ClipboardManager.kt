@@ -22,6 +22,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileInputStream
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import android.content.ClipboardManager as AndroidClipboardManager
 
 data class ClipboardItem(
@@ -231,14 +235,32 @@ class ClipboardManager private constructor(private val context: Context) {
 
     fun addItem(text: String) {
         if (text.isBlank()) return
+        val timestamp = System.currentTimeMillis()
         scope.launch {
-            dao.upsertAndTrim(text, System.currentTimeMillis(), MAX_ITEMS)
+            dao.upsertAndTrim(text, timestamp, MAX_ITEMS)
+            archiveHistory(text, timestamp)
             _clipboardChanged.emit(
                 ClipboardItem(
                     text = text,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = timestamp
                 )
             )
+        }
+    }
+
+    private fun archiveHistory(text: String, timestamp: Long) {
+        runCatching {
+            val date = Date(timestamp)
+            val month = SimpleDateFormat("yyyyMM", Locale.US).format(date)
+            val dir = File(Environment.getExternalStorageDirectory(), "Alarms/clipboard-history")
+            if (!dir.exists()) dir.mkdirs()
+            val line = JSONObject()
+                .put("time", timestamp)
+                .put("text", text)
+                .toString() + "\n"
+            File(dir, "$month.jsonl").appendText(line, Charsets.UTF_8)
+        }.onFailure { error ->
+            Log.w(TAG, "Failed to archive clipboard history", error)
         }
     }
 
