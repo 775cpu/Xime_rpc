@@ -871,11 +871,32 @@ public:
 
     int exportUserDict(const char* dict_name, const char* text_file) {
         if (!rime || !initialized_) return -1;
+        std::string current_schema;
+        if (session_id_) {
+            char schema_id[256] = {0};
+            if (rime->get_current_schema(session_id_, schema_id, sizeof(schema_id))) {
+                current_schema = schema_id;
+            }
+            rime->destroy_session(session_id_);
+            session_id_ = 0;
+        }
+
         RimeModule* module = rime->find_module("levers");
-        if (!module) return -1;
-        RimeLeversApi* levers = (RimeLeversApi*)module->get_api();
-        if (!levers || !RIME_API_AVAILABLE(levers, export_user_dict)) return -1;
-        return levers->export_user_dict(dict_name, text_file);
+        int result = -1;
+        if (module) {
+            RimeLeversApi* levers = (RimeLeversApi*)module->get_api();
+            if (levers && RIME_API_AVAILABLE(levers, export_user_dict)) {
+                result = levers->export_user_dict(dict_name, text_file);
+            }
+        }
+
+        if (!current_schema.empty()) {
+            session_id_ = rime->create_session();
+            if (session_id_) {
+                rime->select_schema(session_id_, current_schema.c_str());
+            }
+        }
+        return result;
     }
 
 private:
