@@ -43,6 +43,19 @@ require(buildAbis.isNotEmpty() && buildAbis.all { it in supportedAbis }) {
     "buildAbis must contain only: ${supportedAbis.joinToString(", ")}"
 }
 
+val configuredAppName = providers.gradleProperty("appName").orElse("曦码输入法").get()
+val configuredApplicationId = providers.gradleProperty("applicationId")
+    .orElse("com.kingzcheung.xime")
+    .get()
+val configuredVersionCode = providers.gradleProperty("versionCode")
+    .orElse("20260828")
+    .get()
+    .toInt()
+val configuredVersionName = providers.gradleProperty("versionName")
+    .orElse("版本号字符串安装界面最多显示超过会用省略号表示长度17个字符android规范合法的是1024")
+    .get()
+val escapedAppName = configuredAppName.replace("\\", "\\\\").replace("\"", "\\\"")
+
 // 获取构建时间已移除：构建时刻会写入 BuildConfig 进而进入 classes.dex，
 // 破坏 F-Droid 可复现构建（不同环境构建时间不同导致产物不一致）。
 
@@ -58,11 +71,14 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.kingzcheung.xime"
+        applicationId = configuredApplicationId
         minSdk = 27
         targetSdk = 35
-        versionCode = 20260828
-        versionName = "2.7.2测试1024长度合法字符串；返回JSON 中的 tsv 字段就是可读词典内容，包含拼音、词语和词频。pinyin_simp.userdb 不再通过 SQLite 读取，而是调用 Rime 原生 export_user_dict 导出。 修改位置： RpcUiController.kt:91 RimeEngine.kt:523 rime_jni.cc:872"
+        versionCode = configuredVersionCode
+        versionName = configuredVersionName
+
+        buildConfigField("String", "APP_NAME", "\"$escapedAppName\"")
+        resValue("string", "app_name", configuredAppName)
 
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

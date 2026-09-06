@@ -76,6 +76,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.kingzcheung.xime.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -102,7 +103,7 @@ fun SettingsMainContent(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             MediumTopAppBar(
-                title = { Text("曦码输入法rpc设置") },
+                title = { Text("${BuildConfig.APP_NAME}设置") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
@@ -133,7 +134,7 @@ fun SettingsMainContent(
                     SettingsItem(
                         icon = Icons.TwoTone.Keyboard,
                         title = "启用输入法",
-                        subtitle = "在系统设置中启用曦码输入法rpc",
+                        subtitle = "在系统设置中启用${BuildConfig.APP_NAME}",
                         onClick = {
                             val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
                             context.startActivity(intent)
