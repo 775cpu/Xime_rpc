@@ -4,7 +4,7 @@
 这是一个基于 rime 框架实现的安卓手机输入法，采用 kotlin + jetpack compose 构建。
 
 ## 快速开始
-- 构建： `./gradlew assembleDebug --quiet`
+- 构建： `./build.sh`
 - 测试： `./gradlew test`
 
 ## 插件开发
@@ -29,13 +29,13 @@
 
 
 ## 每次会话开始时（上班打卡）
-1. 读 PROGRESS.md 了解当前状态
-2. 读 DECISIONS.md 了解重要决策
+1. 读 PROGRESS.md 了解当前状态, 没有就创建
+2. 读 DECISIONS.md 了解重要决策 , 没有就创建
 3. 从 PROGRESS.md 的"下一步"部分继续工作
 
 ## 每次会话结束前（下班打卡）
 1. 更新 PROGRESS.md
-2. 跑 `./gradlew assembleDebug --quiet` 确认一致状态
+2. 跑 `./build.sh` 确认没有错误
 3. 提交所有已完成的工作
 
 ## Jetpack Compose

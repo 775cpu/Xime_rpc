@@ -57,6 +57,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,11 +68,12 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.withFrameNanos
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.util.RpcUiController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -398,6 +401,7 @@ private fun InlineLogView() {
     val context = LocalContext.current
     var logText by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
     val uiState = RpcUiController.state.collectAsState().value
     val logVisible = uiState["log.visible"]?.toBooleanStrictOrNull() ?: true
     val logHeight = uiState["log.height.dp"]
@@ -425,7 +429,8 @@ private fun InlineLogView() {
     }
 
     LaunchedEffect(logText, logHeight) {
-        withFrameNanos { }
+        snapshotFlow { scrollState.maxValue }
+            .first { it > 0 }
         scrollState.scrollTo(scrollState.maxValue)
     }
 
@@ -453,6 +458,20 @@ private fun InlineLogView() {
                 fontFamily = FontFamily.Monospace,
                 style = MaterialTheme.typography.bodySmall
             )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            TextButton(
+                onClick = {
+                    coroutineScope.launch {
+                        scrollState.scrollTo(scrollState.maxValue)
+                    }
+                }
+            ) {
+                Text("滚到底")
+            }
         }
     }
 }
