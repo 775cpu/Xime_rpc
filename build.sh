@@ -22,7 +22,7 @@ export PATH="/home/vscode/.local/bin:/home/vscode/.gradle/wrapper/dists/gradle-8
 BUILD_ABIS="${BUILD_ABIS:-arm64-v8a}"
 APP_NAME="${APP_NAME:-点击使用中文输入法}"
 APPLICATION_ID="${APPLICATION_ID:-com.kingzcheung.xime}"
-VERSION_CODE="${VERSION_CODE:-20260909}"
+VERSION_CODE="${VERSION_CODE:-20260910}"
 VERSION_NAME="${VERSION_NAME:-最多19个英语ABCDEFGHIJKLMNOPQRS最多12个中文版本号字符串安装界面最多显示超过会用省略号表示长度17个字符android规范合法的是1024}"
 
 APP_NAME="${VERSION_CODE: -4}输入法"
