@@ -102,7 +102,7 @@ fun SettingsMainContent(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             MediumTopAppBar(
-                title = { Text("曦码输入法设置") },
+                title = { Text("曦码输入法rpc设置") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
@@ -133,7 +133,7 @@ fun SettingsMainContent(
                     SettingsItem(
                         icon = Icons.TwoTone.Keyboard,
                         title = "启用输入法",
-                        subtitle = "在系统设置中启用曦码输入法",
+                        subtitle = "在系统设置中启用曦码输入法rpc",
                         onClick = {
                             val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
                             context.startActivity(intent)

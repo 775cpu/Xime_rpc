@@ -42,3 +42,11 @@
 For all Compose/Android UI tasks, follow the instructions in
 `.skills/compose-expert/SKILL.md` and consult the reference
 files in `.skills/compose-expert/references/` before answering.
+
+## rpc功能 用与暴露内部状态，控制和调试
+/workspaces/Xime/app/src/main/python/rpc.py
+尽量保证所有功能都能被rpc操作
+例子：
+ip='192.168.1.106'
+!curl "http://{ip}:1144/from%20com.kingzcheung.xime.util%20import%20RpcUiController%3Br=RpcUiController.setOnlySchema('pinyin_simp')"
+{"ok":true,"id":"pinyin_simp","name":"简体拼音","switched":true,"requires_deploy":false}

@@ -2,6 +2,7 @@
 // 基于 trime 的实现
 
 #include <rime_api.h>
+#include <rime_levers_api.h>
 #include <rime/setup.h>
 #include <rime/dict/reverse_lookup_dictionary.h>
 #include "t9_processor.h"
@@ -868,6 +869,15 @@ public:
     const std::string& get_user_data_dir() const { return user_data_dir_; }
     const std::string& get_shared_data_dir() const { return shared_data_dir_; }
 
+    int exportUserDict(const char* dict_name, const char* text_file) {
+        if (!rime || !initialized_) return -1;
+        RimeModule* module = rime->find_module("levers");
+        if (!module) return -1;
+        RimeLeversApi* levers = (RimeLeversApi*)module->get_api();
+        if (!levers || !RIME_API_AVAILABLE(levers, export_user_dict)) return -1;
+        return levers->export_user_dict(dict_name, text_file);
+    }
+
 private:
     RimeApi* rime;
     RimeSessionId session_id_ = 0;
@@ -1702,6 +1712,26 @@ Java_com_kingzcheung_xime_rime_RimeEngine_nativeGetUserConfigString(
     std::string value = Rime::Instance().getUserConfigString(key_ptr);
     env->ReleaseStringUTFChars(key, key_ptr);
     return value.empty() ? nullptr : env->NewStringUTF(value.c_str());
+}
+
+JNIEXPORT jint JNICALL
+Java_com_kingzcheung_xime_rime_RimeEngine_nativeExportUserDict(
+    JNIEnv* env,
+    jobject thiz,
+    jstring dict_name,
+    jstring text_file
+) {
+    const char* dict_ptr = env->GetStringUTFChars(dict_name, nullptr);
+    if (!dict_ptr) return -1;
+    const char* file_ptr = env->GetStringUTFChars(text_file, nullptr);
+    if (!file_ptr) {
+        env->ReleaseStringUTFChars(dict_name, dict_ptr);
+        return -1;
+    }
+    int result = Rime::Instance().exportUserDict(dict_ptr, file_ptr);
+    env->ReleaseStringUTFChars(dict_name, dict_ptr);
+    env->ReleaseStringUTFChars(text_file, file_ptr);
+    return result;
 }
 
 // 读取 user.yaml 用户状态布尔值

@@ -58,11 +58,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.kingzcheung.xime_rpc"
+        applicationId = "com.kingzcheung.xime"
         minSdk = 27
         targetSdk = 35
         versionCode = 20260828
-        versionName = "2.7.2"
+        versionName = "2.7.2测试1024长度合法字符串；返回JSON 中的 tsv 字段就是可读词典内容，包含拼音、词语和词频。pinyin_simp.userdb 不再通过 SQLite 读取，而是调用 Rime 原生 export_user_dict 导出。 修改位置： RpcUiController.kt:91 RimeEngine.kt:523 rime_jni.cc:872"
 
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -184,7 +184,7 @@ android.applicationVariants.all {
         val abi = filters.find { it.filterType.toString() == "ABI" }?.identifier
             ?: buildAbis.singleOrNull()
             ?: "universal"
-        (this as BaseVariantOutputImpl).outputFileName = "$appName-$versionName-$abi.apk"
+        (this as BaseVariantOutputImpl).outputFileName = "$appName-$versionCode-$abi.apk"
     }
 }
 

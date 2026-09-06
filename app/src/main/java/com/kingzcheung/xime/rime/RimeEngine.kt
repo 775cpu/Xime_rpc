@@ -519,6 +519,12 @@ class RimeEngine {
     fun getSchemaPacks(schemaId: String): List<String> =
         getSchemaList(schemaId, "translator/packs")
 
+    /** 将指定 Rime 用户词典导出为可读的 TSV 文本，返回导出的条目数。 */
+    fun exportUserDict(dictName: String, textFile: String): Int {
+        if (!isInitialized || dictName.isBlank() || textFile.isBlank()) return -1
+        return locked { nativeExportUserDict(dictName, textFile) }
+    }
+
     /** 读取方案 translator.dictionary 主词典名。 */
     fun getSchemaDictionary(schemaId: String): String? =
         getSchemaString(schemaId, "translator/dictionary")
@@ -676,6 +682,7 @@ class RimeEngine {
     private external fun nativeGetSchemaList(schemaId: String, key: String): Array<String>?
     private external fun nativeGetSchemaString(schemaId: String, key: String): String?
     private external fun nativeGetUserConfigString(key: String): String?
+    private external fun nativeExportUserDict(dictName: String, textFile: String): Int
     private external fun nativeGetUserConfigBool(key: String): Boolean
     private external fun nativeSetUserConfigString(key: String, value: String): Boolean
     private external fun nativeSetUserConfigBool(key: String, value: Boolean): Boolean

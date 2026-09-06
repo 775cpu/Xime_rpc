@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 object RpcUiController {
     private var context: Context? = null
@@ -83,6 +84,62 @@ object RpcUiController {
             .put("name", schema.name)
             .put("switched", switched)
             .put("requires_deploy", !switched)
+            .toString()
+    }
+
+    @JvmStatic
+    fun listUserDicts(): String {
+        val appContext = context ?: return errorResult("controller_not_initialized")
+        val names = File(appContext.filesDir, "rime")
+            .listFiles { file -> file.isFile && file.name.endsWith(".userdb") }
+            ?.map { it.name.removeSuffix(".userdb") }
+            ?.sorted()
+            ?: emptyList()
+        return JSONObject()
+            .put("ok", true)
+            .put("dicts", JSONArray(names))
+            .toString()
+    }
+
+    @JvmStatic
+    fun readUserDict(dictName: String): String {
+        val appContext = context ?: return errorResult("controller_not_initialized")
+        if (!RimeEngine.isInitialized()) return errorResult("rime_not_initialized")
+        if (!dictName.matches(Regex("[A-Za-z0-9_.-]+"))) {
+            return errorResult("invalid_dict_name")
+        }
+
+        val rimeDir = File(appContext.filesDir, "rime")
+        val source = File(rimeDir, "$dictName.userdb")
+        if (!source.isFile) return errorResult("user_dict_not_found:$dictName")
+
+        val exported = File.createTempFile("rpc-$dictName-", ".userdb.txt", appContext.cacheDir)
+        return try {
+            val count = RimeEngine.getInstance().exportUserDict(dictName, exported.absolutePath)
+            if (count < 0 || !exported.isFile) return errorResult("user_dict_export_failed:$dictName")
+            JSONObject()
+                .put("ok", true)
+                .put("dict", dictName)
+                .put("count", count)
+                .put("tsv", exported.readText(Charsets.UTF_8))
+                .toString()
+        } finally {
+            exported.delete()
+        }
+    }
+
+    @JvmStatic
+    fun readAllUserDicts(): String {
+        val listed = JSONObject(listUserDicts())
+        if (!listed.optBoolean("ok", false)) return listed.toString()
+        val result = JSONArray()
+        val dicts = listed.optJSONArray("dicts") ?: JSONArray()
+        for (index in 0 until dicts.length()) {
+            result.put(JSONObject(readUserDict(dicts.getString(index))))
+        }
+        return JSONObject()
+            .put("ok", true)
+            .put("dicts", result)
             .toString()
     }
 
