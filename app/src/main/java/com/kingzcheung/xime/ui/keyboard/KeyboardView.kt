@@ -99,8 +99,10 @@ fun KeyboardView(
         callbacks.onKeyboardModeChange?.invoke(active)
     }
 
+    val context = LocalContext.current
     val t9Controller = remember {
         T9InputController(
+            context = context,
             onCompositionRefresh = { composition ->
                 callbacks.onT9RefreshComposition?.invoke(composition)
             },

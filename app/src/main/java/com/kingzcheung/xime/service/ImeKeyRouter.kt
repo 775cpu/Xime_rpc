@@ -10,6 +10,7 @@ import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.keyboard.KeyboardLayoutState
 import com.kingzcheung.xime.ui.keyboard.isT9Schema
 import com.kingzcheung.xime.util.FileLogger
+import com.kingzcheung.xime.util.InputHistoryRecorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,7 @@ import kotlinx.coroutines.withContext
  */
 internal class ImeKeyRouter(private val service: XimeInputMethodService) {
     internal fun handleKeyPress(key: String, isShifted: Boolean) {
+        InputHistoryRecorder.record(service, key, isShifted)
         if (service.uiState.value.quickSendFormFocused) {
             when (key) {
                 "enter" -> {

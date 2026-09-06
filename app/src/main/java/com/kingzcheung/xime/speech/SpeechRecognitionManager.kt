@@ -27,6 +27,8 @@ class SpeechRecognitionManager(private val context: Context) {
 
     private var backend: AsrBackend? = null
     private var recordingThread: RecordingThread? = null
+    private var pendingAudioArchive: AudioArchive? = null
+    private var audioFallbackRunnable: Runnable? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     // 会话序号：用于区分连续语音会话，防止旧会话的回收线程误释放新会话的后端
@@ -118,6 +120,8 @@ class SpeechRecognitionManager(private val context: Context) {
     private fun startRecording() {
         val currentBackend = synchronized(preloadLock) { backend } ?: return
         synchronized(preloadLock) { sessionId++ }
+        audioFallbackRunnable?.let(mainHandler::removeCallbacks)
+        audioFallbackRunnable = null
 
         // 预启动的 AudioRecord 已运行 ~250ms，直接交给录音线程
         var preStarted: AudioRecord? = null
@@ -171,6 +175,7 @@ class SpeechRecognitionManager(private val context: Context) {
             mainHandler.post {
                 stateCallback?.invoke(RecognitionState.IDLE)
             }
+            scheduleAudioFallback()
         }.start()
     }
 
@@ -214,7 +219,24 @@ class SpeechRecognitionManager(private val context: Context) {
             mainHandler.post {
                 stateCallback?.invoke(RecognitionState.IDLE)
             }
+            scheduleAudioFallback()
         }.start()
+    }
+
+    private fun scheduleAudioFallback() {
+        audioFallbackRunnable?.let(mainHandler::removeCallbacks)
+        val fallback = Runnable { finalizeAudio(null) }
+        audioFallbackRunnable = fallback
+        mainHandler.postDelayed(fallback, 2000L)
+    }
+
+    private fun finalizeAudio(text: String?) {
+        val archive = synchronized(this) {
+            val current = pendingAudioArchive
+            pendingAudioArchive = null
+            current
+        } ?: return
+        archive.renameWithText(text)
     }
 
     fun setCallbacks(
@@ -397,6 +419,11 @@ class SpeechRecognitionManager(private val context: Context) {
                 stateCallback?.invoke(RecognitionState.LISTENING)
             }
 
+            val audioArchive = AudioArchive.create()
+            synchronized(this@SpeechRecognitionManager) {
+                pendingAudioArchive = audioArchive
+            }
+
             val buffer = ShortArray((SAMPLE_RATE * BUFFER_SIZE_SECONDS).toInt())
             val byteBuffer = ByteArray(buffer.size * 2)
             var speechDetected = false
@@ -425,6 +452,7 @@ class SpeechRecognitionManager(private val context: Context) {
                             spectrumCallback?.invoke(spectrum)
                         }
                         val chunk = byteBuffer.copyOf(nread * 2)
+                        audioArchive?.write(chunk, chunk.size)
                         if (!speechDetected) {
                             preSpeechBuffer.addLast(chunk)
                             // 缓冲满仍未检测到语音：放弃 VAD，直接开始识别，
@@ -455,7 +483,13 @@ class SpeechRecognitionManager(private val context: Context) {
             }
 
             currentBackend.stop()
+            audioArchive?.close()
             Log.d(TAG, "Recognition thread ended")
+            if (audioArchive == null) {
+                synchronized(this@SpeechRecognitionManager) {
+                    pendingAudioArchive = null
+                }
+            }
         }
 
         private fun isSpeech(chunk: ByteArray): Boolean {
@@ -472,6 +506,7 @@ class SpeechRecognitionManager(private val context: Context) {
     }
 
     private fun handleResult(text: String) {
+        finalizeAudio(text)
         mainHandler.post {
             resultCallback?.invoke(text)
         }
@@ -487,6 +522,7 @@ class SpeechRecognitionManager(private val context: Context) {
 
     private fun handleError(error: String) {
         Log.e(TAG, "Recognition error: $error")
+        finalizeAudio(null)
         mainHandler.post {
             errorCallback?.invoke(error, true)
         }
