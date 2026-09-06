@@ -91,7 +91,7 @@ object RpcUiController {
     fun listUserDicts(): String {
         val appContext = context ?: return errorResult("controller_not_initialized")
         val names = File(appContext.filesDir, "rime")
-            .listFiles { file -> file.isFile && file.name.endsWith(".userdb") }
+            .listFiles { file -> file.exists() && file.name.endsWith(".userdb") }
             ?.map { it.name.removeSuffix(".userdb") }
             ?.sorted()
             ?: emptyList()
@@ -111,7 +111,7 @@ object RpcUiController {
 
         val rimeDir = File(appContext.filesDir, "rime")
         val source = File(rimeDir, "$dictName.userdb")
-        if (!source.isFile) return errorResult("user_dict_not_found:$dictName")
+        if (!source.exists()) return errorResult("user_dict_not_found:$dictName")
 
         val exported = File.createTempFile("rpc-$dictName-", ".userdb.txt", appContext.cacheDir)
         return try {
