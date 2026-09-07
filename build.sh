@@ -34,6 +34,28 @@ fi
 
 git submodule update --init --recursive
 
+ensure_native_dependency() {
+    local repository="$1"
+    local destination="$2"
+    local marker="$destination/CMakeLists.txt"
+    if [[ -f "$marker" ]]; then
+        return
+    fi
+
+    local temporary_directory
+    temporary_directory="$(mktemp -d)"
+    trap 'rm -rf "$temporary_directory"' RETURN
+    echo "缺少 native 依赖，正在下载: $repository"
+    git clone --depth 1 --recurse-submodules "$repository" "$temporary_directory/source"
+    mkdir -p "$destination"
+    cp -a "$temporary_directory/source/." "$destination/"
+    trap - RETURN
+    rm -rf "$temporary_directory"
+}
+
+ensure_native_dependency "https://github.com/rime/librime.git" "app/src/main/jni/librime"
+ensure_native_dependency "https://github.com/google/snappy.git" "app/src/main/jni/snappy"
+
 ./gradlew assembleDebug --quiet \
     "-PappName=$APP_NAME" \
     "-PapplicationId=$APPLICATION_ID" \
