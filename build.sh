@@ -1,24 +1,25 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
-
 cd "$(dirname "$0")"
 
-ANDROID_HOME_DEFAULT="/home/vscode/.cache/briefcase/tools/android_sdk"
-if [[ ! -d "$ANDROID_HOME_DEFAULT" && -d /home/vscode/.buildozer/android/platform/android-sdk ]]; then
-    ANDROID_HOME_DEFAULT="/home/vscode/.buildozer/android/platform/android-sdk"
+# 路径前缀变量（末尾带斜杠）
+PREFIX="/home/vscode/"
+
+ANDROID_HOME_DEFAULT="${PREFIX}.cache/briefcase/tools/android_sdk"
+if [[ ! -d "$ANDROID_HOME_DEFAULT" && -d "${PREFIX}.buildozer/android/platform/android-sdk" ]]; then
+    ANDROID_HOME_DEFAULT="${PREFIX}.buildozer/android/platform/android-sdk"
 fi
 
 export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_HOME_DEFAULT}"
 export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
 ANDROID_NDK_DEFAULT="$ANDROID_HOME/ndk/29.0.14206865"
-if [[ ! -d "$ANDROID_NDK_DEFAULT" && -d /home/vscode/.buildozer/android/platform/android-ndk-r25b ]]; then
-    ANDROID_NDK_DEFAULT="/home/vscode/.buildozer/android/platform/android-ndk-r25b"
+if [[ ! -d "$ANDROID_NDK_DEFAULT" && -d "${PREFIX}.buildozer/android/platform/android-ndk-r25b" ]]; then
+    ANDROID_NDK_DEFAULT="${PREFIX}.buildozer/android/platform/android-ndk-r25b"
 fi
 export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_NDK_DEFAULT}"
 export ANDROID_NDK_ROOT="${ANDROID_NDK_ROOT:-$ANDROID_NDK_HOME}"
-export GRADLE_USER_HOME="${GRADLE_USER_HOME:-/home/vscode/.gradle}"
-export PATH="/home/vscode/.local/bin:/home/vscode/.gradle/wrapper/dists/gradle-8.14.3-all/h9bud5ffjflfoe91ghcb596uv/gradle-8.14.3/bin:$PATH"
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-${PREFIX}.gradle}"
+export PATH="${PREFIX}.local/bin:${PREFIX}.gradle/wrapper/dists/gradle-8.14.3-all/h9bud5ffjflfoe91ghcb596uv/gradle-8.14.3/bin:$PATH"
 BUILD_ABIS="${BUILD_ABIS:-arm64-v8a}"
 APP_NAME="${APP_NAME:-点击使用中文输入法}"
 APPLICATION_ID="${APPLICATION_ID:-com.kingzcheung.xime}"
@@ -56,12 +57,16 @@ ensure_native_dependency() {
 ensure_native_dependency "https://github.com/rime/librime.git" "app/src/main/jni/librime"
 ensure_native_dependency "https://github.com/google/snappy.git" "app/src/main/jni/snappy"
 
-./gradlew assembleDebug --quiet \
-    "-PappName=$APP_NAME" \
-    "-PapplicationId=$APPLICATION_ID" \
-    "-PversionCode=$VERSION_CODE" \
-    "-PversionName=$VERSION_NAME" \
-    "-PbuildAbis=$BUILD_ABIS" "$@"
+# 使用数组传参，避免续行符问题
+gradle_args=(
+    "-PappName=$APP_NAME"
+    "-PapplicationId=$APPLICATION_ID"
+    "-PversionCode=$VERSION_CODE"
+    "-PversionName=$VERSION_NAME"
+    "-PbuildAbis=$BUILD_ABIS"
+)
+
+./gradlew assembleDebug --quiet "${gradle_args[@]}" "$@"
 
 echo "生成的 APK："
 find app/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print
