@@ -4,13 +4,36 @@ cd "$(dirname "$0")"
 
 # 路径前缀变量（末尾带斜杠）
 PREFIX="/home/vscode/"
+PROJECT_ROOT="$(cd .. && pwd)"
 
-ANDROID_HOME_DEFAULT="${PREFIX}.cache/briefcase/tools/android_sdk"
-if [[ ! -d "$ANDROID_HOME_DEFAULT" && -d "${PREFIX}.buildozer/android/platform/android-sdk" ]]; then
-    ANDROID_HOME_DEFAULT="${PREFIX}.buildozer/android/platform/android-sdk"
+ANDROID_HOME_DEFAULT=""
+for candidate in \
+    "${ANDROID_HOME:-}" \
+    "${ANDROID_SDK_ROOT:-}" \
+    "${PREFIX}.cache/briefcase/tools/android_sdk" \
+    "${PREFIX}.buildozer/android/platform/android-sdk" \
+    "$PROJECT_ROOT/.buildozer/android/platform/android-sdk" \
+    "$PROJECT_ROOT/sdk"; do
+    if [[ -n "$candidate" && -f "$candidate/platforms/android-36/android.jar" ]]; then
+        ANDROID_HOME_DEFAULT="$(cd "$candidate" && pwd)"
+        break
+    fi
+done
+
+echo "${PREFIX} 没有 SDK 时，通过sudo find 全盘搜索 SDK 根目录。"
+if [[ -z "$ANDROID_HOME_DEFAULT" ]]; then
+    platform_jar="$(sudo -n find / -type f -path '*/platforms/android-36/android.jar' -print -quit 2>/dev/null || find / -type f -path '*/platforms/android-36/android.jar' -print -quit 2>/dev/null || true)"
+    if [[ -n "$platform_jar" ]]; then
+        ANDROID_HOME_DEFAULT="$(cd "$(dirname "$(dirname "$(dirname "$platform_jar")")")" && pwd)"
+    fi
 fi
 
-export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_HOME_DEFAULT}"
+if [[ -z "$ANDROID_HOME_DEFAULT" ]]; then
+    echo "找不到 Android SDK，请检查 $PROJECT_ROOT/.buildozer/android/platform/android-sdk" >&2
+    exit 1
+fi
+
+export ANDROID_HOME="$ANDROID_HOME_DEFAULT"
 export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
 ANDROID_NDK_DEFAULT="$ANDROID_HOME/ndk/29.0.14206865"
 if [[ ! -d "$ANDROID_NDK_DEFAULT" && -d "${PREFIX}.buildozer/android/platform/android-ndk-r25b" ]]; then
