@@ -38,6 +38,7 @@ fun SettingsScreen(
                 onNavigateToAbout = { navController.navigate(SettingsRoutes.About) },
                 onNavigateToWebDav = { navController.navigate(SettingsRoutes.WebDav) },
                 onNavigateToClipboardSync = { navController.navigate(SettingsRoutes.ClipboardSync) }
+                ,onNavigateToRpc = { navController.navigate(SettingsRoutes.Rpc) }
             )
         }
         composable(SettingsRoutes.Schema) {
@@ -194,6 +195,9 @@ fun SettingsScreen(
                 onBack = { navController.popBackStack() },
                 onNavigateToPlugins = { navController.navigate(SettingsRoutes.Plugins) }
             )
+        }
+        composable(SettingsRoutes.Rpc) {
+            RpcSettingsContent(onBack = { navController.popBackStack() })
         }
         composable(SettingsRoutes.About) {
             AboutContent(

@@ -101,6 +101,7 @@ fun SettingsMainContent(
     onNavigateToAbout: () -> Unit,
     onNavigateToWebDav: () -> Unit = {},
     onNavigateToClipboardSync: () -> Unit = {}
+    ,onNavigateToRpc: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -370,6 +371,18 @@ fun SettingsMainContent(
                         title = "剪贴板同步",
                         subtitle = "通过插件将剪贴板与远端设备双向同步",
                         onClick = onNavigateToClipboardSync,
+                        showArrow = true
+                    )
+                })
+            }
+
+            item {
+                SettingsSection(title = "开发与调试", content = {
+                    SettingsItem(
+                        icon = Icons.TwoTone.Build,
+                        title = "RPC 设置",
+                        subtitle = "HTTP 端口、MQTT Broker、Topic 和公钥",
+                        onClick = onNavigateToRpc,
                         showArrow = true
                     )
                 })

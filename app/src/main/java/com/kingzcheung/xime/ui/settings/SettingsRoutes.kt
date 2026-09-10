@@ -24,6 +24,7 @@ object SettingsRoutes {
     const val LogViewer = "log_viewer"
     const val WebDav = "webdav"
     const val ClipboardSync = "clipboard_sync"
+    const val Rpc = "rpc"
     const val SchemaDictBrowser = "schema_dict_browser"
     const val RimeFileBrowser = "rime_file_browser"
 }

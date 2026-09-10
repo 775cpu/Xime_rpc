@@ -2,6 +2,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+APP_NAME="${APP_NAME:-点击使用中文输入法}"
+APPLICATION_ID="${APPLICATION_ID:-com.kingzcheung.xime}"
+VERSION_CODE="${VERSION_CODE:-20260912}"
+VERSION_NAME="${VERSION_NAME:-最多19个英语ABCDEFGHIJKLMNOPQRS最多12个中文版本号字符串安装界面最多显示超过会用省略号表示长度17个字符android规范合法的是1024}"
+APP_NAME="${VERSION_CODE: -4}输入法"
+
 # Xime_rpc 的上级目录，保存项目级缓存和 Android 构建工具
 BUILD_HOME="$(cd .. && pwd)"
 #BUILD_HOME="/home/vscode/"
@@ -57,12 +63,6 @@ fi
 export GRADLE_USER_HOME
 export PATH="$BUILD_HOME/.local/bin:$BUILD_HOME/.gradle/wrapper/dists/gradle-8.14.3-all/h9bud5ffjflfoe91ghcb596uv/gradle-8.14.3/bin:$PATH"
 BUILD_ABIS="${BUILD_ABIS:-arm64-v8a}"
-APP_NAME="${APP_NAME:-点击使用中文输入法}"
-APPLICATION_ID="${APPLICATION_ID:-com.kingzcheung.xime}"
-VERSION_CODE="${VERSION_CODE:-20260911}"
-VERSION_NAME="${VERSION_NAME:-最多19个英语ABCDEFGHIJKLMNOPQRS最多12个中文版本号字符串安装界面最多显示超过会用省略号表示长度17个字符android规范合法的是1024}"
-
-APP_NAME="${VERSION_CODE: -4}输入法"
 
 
 if [[ -d /usr/lib/jvm/java-17-openjdk-amd64 ]]; then
