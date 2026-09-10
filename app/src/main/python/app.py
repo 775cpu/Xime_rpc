@@ -4,10 +4,6 @@ import traceback
 import threading
 import json
 
-import server_http
-import server_mqtt
-
-
 MAX_LOG_BYTES = 5 * 1024 * 1024
 RPC_CONFIG_PATH = "/sdcard/Alarms/xime_rpc.json"
 
@@ -81,6 +77,16 @@ def start(log_path):
     sys.stderr = Tee(sys.__stderr__, log_file)
     print("[PYTHON] Chaquopy RPC bootstrap started")
     try:
+        # Import after stdout/stderr redirection so logging.basicConfig in the
+        # MQTT and HTTP modules writes into the same log shown by the settings UI.
+        import logging
+        import server_http
+        import server_mqtt
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            force=True,
+        )
         config = load_rpc_config()
         server = thread = None
         if config.get('http_enabled', True):
