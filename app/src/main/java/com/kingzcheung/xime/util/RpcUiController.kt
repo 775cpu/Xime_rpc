@@ -143,6 +143,36 @@ object RpcUiController {
             .toString()
     }
 
+    /** 将外部备份的原始 .userdb 文件恢复到 Rime 用户词典目录。重启 Rime 后生效。 */
+    @JvmStatic
+    fun importUserDict(dictName: String, backupPath: String): String {
+        val appContext = context ?: return errorResult("controller_not_initialized")
+        if (!dictName.matches(Regex("[A-Za-z0-9_.-]+"))) {
+            return errorResult("invalid_dict_name")
+        }
+        val source = File(backupPath)
+        if (!source.isFile) return errorResult("backup_not_found:$backupPath")
+        if (source.length() == 0L) return errorResult("backup_empty:$dictName")
+
+        return try {
+            val targetDir = File(appContext.filesDir, "rime")
+            if (!targetDir.exists() && !targetDir.mkdirs()) {
+                return errorResult("rime_dir_create_failed")
+            }
+            val target = File(targetDir, "$dictName.userdb")
+            source.copyTo(target, overwrite = true)
+            JSONObject()
+                .put("ok", true)
+                .put("dict", dictName)
+                .put("path", target.absolutePath)
+                .put("bytes", target.length())
+                .put("restart_required", true)
+                .toString()
+        } catch (error: Exception) {
+            errorResult("user_dict_import_failed:${error.message}")
+        }
+    }
+
     private fun errorResult(message: String): String =
         JSONObject().put("ok", false).put("error", message).toString()
 }

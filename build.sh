@@ -2,9 +2,25 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+BUILD_VARIANT="debug"
+case "${1:-}" in
+    release|debug)
+        BUILD_VARIANT="$1"
+        shift
+        ;;
+esac
+
+if [[ "$BUILD_VARIANT" == "release" ]]; then
+    SIGNING_KEY="$HOME/.ssh/NIST256p.pem"
+    if [[ ! -f "$SIGNING_KEY" ]]; then
+        echo "错误: 必须存在签名私钥 $SIGNING_KEY" >&2
+        exit 1
+    fi
+fi
+
 APP_NAME="${APP_NAME:-点击使用中文输入法}"
 APPLICATION_ID="${APPLICATION_ID:-com.kingzcheung.xime}"
-VERSION_CODE="${VERSION_CODE:-20260912}"
+VERSION_CODE="${VERSION_CODE:-20260913}"
 VERSION_NAME="${VERSION_NAME:-最多19个英语ABCDEFGHIJKLMNOPQRS最多12个中文版本号字符串安装界面最多显示超过会用省略号表示长度17个字符android规范合法的是1024}"
 APP_NAME="${VERSION_CODE: -4}输入法"
 
@@ -102,7 +118,26 @@ gradle_args=(
     "-PbuildAbis=$BUILD_ABIS"
 )
 
-./gradlew assembleDebug --quiet "${gradle_args[@]}" "$@"
+if [[ "$BUILD_VARIANT" == "release" ]]; then
+    ./gradlew assembleRelease --quiet "${gradle_args[@]}" "$@"
+
+    release_dir="$PWD/app/build/outputs/apk/release"
+    mapfile -t release_apks < <(find "$release_dir" -maxdepth 1 -type f -name '*.apk' ! -name '*-signed.apk' -print | sort)
+    if [[ "${#release_apks[@]}" -eq 0 ]]; then
+        echo "错误: 未找到 release APK: $release_dir" >&2
+        exit 1
+    fi
+
+    for apk in "${release_apks[@]}"; do
+        python3 "$PWD/apk_sign.py" "$apk"
+    done
+else
+    ./gradlew assembleDebug --quiet "${gradle_args[@]}" "$@"
+fi
 
 echo "生成的 APK："
-find "$PWD/app/build/outputs/apk/debug" -maxdepth 1 -type f -name '*.apk' -print
+if [[ "$BUILD_VARIANT" == "release" ]]; then
+    find "$PWD/app/build/outputs/apk/release" -maxdepth 1 -type f -name '*-signed.apk' -print
+else
+    find "$PWD/app/build/outputs/apk/debug" -maxdepth 1 -type f -name '*.apk' ! -name '*-signed.apk' -print
+fi

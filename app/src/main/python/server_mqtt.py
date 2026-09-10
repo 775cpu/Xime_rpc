@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from multi_mqtt import MultiMQTTManager, stime, utc_ms
+from multi_mqtt import BROKER_LIST, MultiMQTTManager, stime, utc_ms
 import time
 import logging
 from rpc_executor import PythonExecutor, format_result
@@ -8,17 +8,16 @@ logger = logging.getLogger("Server")
 REQUEST_TOPIC = "sys/device/request"
 
 class MQTTServer:
-    def __init__(self, server_public_key_bytes=None, brokers=None,
+    def __init__(self, server_public_key_bytes=None, brokers=BROKER_LIST,
                  request_topic=REQUEST_TOPIC, response_topic="sys/device/response"):
         # 实例化网络层管理器 (enable_crypto 默认为 False)
         self.request_topic = request_topic
         self.response_topic = response_topic
         manager_args = {
-            "log_messages": False,
+            "log_messages": True,
             "server_public_key_bytes": server_public_key_bytes,
         }
-        if brokers:
-            manager_args["brokers"] = brokers
+        manager_args["brokers"] = brokers
         self.mqtt_net = MultiMQTTManager(**manager_args)
         self.mqtt_net.set_on_message(self.handle_message)
         self.executor = PythonExecutor()
@@ -61,17 +60,13 @@ class MQTTServer:
             self.mqtt_net.stop()
 
 def start(config):
-    brokers = []
-    for item in str(config.get("mqtt_brokers", "")).replace(",", "\n").splitlines():
-        host, separator, port = item.strip().rpartition(":")
-        if host and separator and port.isdigit():
-            brokers.append((host, int(port)))
     server = MQTTServer(
         server_public_key_bytes=str(config.get("mqtt_pub_key", "")) or None,
-        brokers=brokers or None,
         request_topic=str(config.get("mqtt_request_topic", REQUEST_TOPIC)),
         response_topic=str(config.get("mqtt_response_topic", "sys/device/response")),
     )
+    logger.info("🚀 启动 MQTT RPC，使用网络层 BROKER_LIST，共 %d 个 Broker", len(BROKER_LIST))
+    logger.info("🔓 MQTT 公钥验签: %s", "启用" if config.get("mqtt_pub_key", "").strip() else "关闭（接收所有消息）")
     server.mqtt_net.start()
     time.sleep(2)
     server.mqtt_net.subscribe(server.request_topic)

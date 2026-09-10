@@ -298,7 +298,8 @@ class MultiMQTTManager:
                 logger.info(f"✅ [已连接] Broker: {host}")
                 with self.lock:
                     for topic in self.subscribed_topics:
-                        client.subscribe(topic)
+                        result = client.subscribe(topic)
+                        logger.info(f"📡 [已订阅] Broker: {host} Topic: {topic} result={result[0]}")
             else:
                 logger.warning(f"❌ [连接失败] Broker: {host}, rc={rc}")
         return on_connect
@@ -357,7 +358,7 @@ class MultiMQTTManager:
 
 
                 if self.log_messages:
-                    logger.info(f"📩 收到消息 [{msg.topic}] 来自 {host}")
+                    logger.info(f"📩 收到消息 [{msg.topic}] 来自 {host} req_id={req_id}")
 
                 if self.message_callback:
                     if (self.server_public_key_bytes or self.client_private_key_bytes) and '|' in req_id:
@@ -372,7 +373,8 @@ class MultiMQTTManager:
             self.subscribed_topics.add(topic)
             for host, c in self.clients.items():
                 if c.is_connected():
-                    c.subscribe(topic)
+                    result = c.subscribe(topic)
+                    logger.info(f"📡 [已订阅] Broker: {host} Topic: {topic} result={result[0]}")
 
     def publish_broadcast(self, topic: str, payload_dict: dict, client_private_key_bytes=None):
         """广播传输消息"""

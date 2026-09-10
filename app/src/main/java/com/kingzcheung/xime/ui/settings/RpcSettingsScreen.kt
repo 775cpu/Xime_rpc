@@ -42,7 +42,6 @@ fun RpcSettingsContent(onBack: () -> Unit) {
     var httpHost by remember { mutableStateOf(initial.httpHost) }
     var httpKey by remember { mutableStateOf(initial.httpKey) }
     var mqttEnabled by remember { mutableStateOf(initial.mqttEnabled) }
-    var brokers by remember { mutableStateOf(initial.mqttBrokers) }
     var requestTopic by remember { mutableStateOf(initial.mqttRequestTopic) }
     var responseTopic by remember { mutableStateOf(initial.mqttResponseTopic) }
     var pubKey by remember { mutableStateOf(initial.mqttPubKey) }
@@ -83,12 +82,6 @@ fun RpcSettingsContent(onBack: () -> Unit) {
 
             Text("MQTT RPC", style = MaterialTheme.typography.titleMedium)
             RpcSwitchRow("启用 MQTT RPC", mqttEnabled) { mqttEnabled = it }
-            RpcField(
-                "Broker 列表",
-                brokers,
-                { brokers = it },
-                "每行一个，例如 broker.emqx.io:1883"
-            )
             RpcField("请求 Topic", requestTopic, { requestTopic = it }, "默认 sys/device/request")
             RpcField("回复 Topic", responseTopic, { responseTopic = it }, "默认 sys/device/response")
             RpcField(
@@ -111,7 +104,6 @@ fun RpcSettingsContent(onBack: () -> Unit) {
                                 httpHost = httpHost.trim().ifEmpty { "0.0.0.0" },
                                 httpKey = httpKey,
                                 mqttEnabled = mqttEnabled,
-                                mqttBrokers = brokers,
                                 mqttRequestTopic = requestTopic,
                                 mqttResponseTopic = responseTopic,
                                 mqttPubKey = pubKey

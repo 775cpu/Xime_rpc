@@ -18,8 +18,6 @@ data class RpcSettings(
     val httpKey: String = "",
     @SerialName("mqtt_enabled")
     val mqttEnabled: Boolean = false,
-    @SerialName("mqtt_brokers")
-    val mqttBrokers: String = "broker.emqx.io:1883",
     @SerialName("mqtt_request_topic")
     val mqttRequestTopic: String = "sys/device/request",
     @SerialName("mqtt_response_topic")
