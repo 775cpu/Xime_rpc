@@ -43,6 +43,18 @@ class SettingsPreferencesTest {
     }
 
     @Test
+    fun rpcLogAndLauncherDefaultsAreSecure() {
+        assertFalse(SettingsPreferences.isRpcLogToDiskEnabled(context))
+        assertTrue(SettingsPreferences.isLauncherIconHidden(context))
+
+        SettingsPreferences.setRpcLogToDiskEnabled(context, true)
+        SettingsPreferences.setLauncherIconHidden(context, false)
+
+        assertTrue(SettingsPreferences.isRpcLogToDiskEnabled(context))
+        assertFalse(SettingsPreferences.isLauncherIconHidden(context))
+    }
+
+    @Test
     fun darkModeValues() {
         SettingsPreferences.setDarkMode(context, 0)
         assertEquals(0, SettingsPreferences.getDarkMode(context))

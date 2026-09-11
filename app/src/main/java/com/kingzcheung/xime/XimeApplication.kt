@@ -20,6 +20,7 @@ import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.ui.keyboard.AppFonts
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.theme.KeyboardThemes
+import com.kingzcheung.xime.util.LauncherIconController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -97,6 +98,9 @@ class XimeApplication : Application(), ImageLoaderFactory {
         SettingsPreferences.defaultKeyboardTheme = KeysConfigHelper.loadDefaultThemeId(this)
         SettingsPreferences.defaultDarkMode = KeysConfigHelper.loadDefaultDarkMode(this)
 
+        // 默认隐藏桌面图标，并允许设置页在运行时切换显示状态。
+        LauncherIconController.syncFromPreference(this)
+
         // 初始化模型运行时（内存管理 + 生命周期）
         ModelRuntime.attach(this)
 
@@ -129,9 +133,14 @@ class XimeApplication : Application(), ImageLoaderFactory {
                 if (!Python.isStarted()) {
                     Python.start(AndroidPlatform(this@XimeApplication))
                 }
+                val logPath = if (SettingsPreferences.isRpcLogToDiskEnabled(this@XimeApplication)) {
+                    File(filesDir, "rpc.log").absolutePath
+                } else {
+                    null
+                }
                 Python.getInstance()
                     .getModule("app")
-                    .callAttr("start", File(filesDir, "rpc.log").absolutePath)
+                    .callAttr("start", logPath)
             } catch (e: Exception) {
                 FileLogger.e(TAG, "Failed to start Python RPC", e)
             }

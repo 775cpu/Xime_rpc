@@ -4,8 +4,15 @@ import traceback
 import threading
 import json
 
-MAX_LOG_BYTES = 5 * 1024 * 1024
+MAX_LOG_BYTES = 100 * 1024
+MAX_LOG_LINES = 1000
 RPC_CONFIG_PATH = "/sdcard/Alarms/xime_rpc.json"
+
+try:
+    from jnius import autoclass
+    RpcUiController = autoclass("com.kingzcheung.xime.util.RpcUiController")
+except Exception:  # pragma: no cover - Chaquopy may not be available in pure Python tests.
+    RpcUiController = None
 
 def load_rpc_config():
     defaults = {
@@ -56,25 +63,56 @@ class LimitedLogFile:
 
 
 class Tee:
-    def __init__(self, stream, file_handle):
+    def __init__(self, stream, sink):
         self.stream = stream
-        self.file_handle = file_handle
+        self.sink = sink
 
     def write(self, value):
         self.stream.write(value)
-        self.file_handle.write(value)
-        self.file_handle.flush()
+        if self.sink is not None:
+            self.sink.write(value)
+            self.sink.flush()
 
     def flush(self):
         self.stream.flush()
-        self.file_handle.flush()
+        if self.sink is not None:
+            self.sink.flush()
+
+
+class MemoryLogProxy:
+    def __init__(self):
+        self.buffer = []
+
+    def write(self, value):
+        if not value:
+            return
+        text = value if isinstance(value, str) else value.decode("utf-8", errors="replace")
+        if RpcUiController is not None:
+            try:
+                RpcUiController.appendLog(text)
+            except Exception:
+                pass
+        self.buffer.append(text)
+        total_chars = sum(len(part) for part in self.buffer)
+        if total_chars > MAX_LOG_BYTES:
+            trimmed = ''.join(self.buffer)
+            trimmed = trimmed[-MAX_LOG_BYTES:]
+            self.buffer = trimmed.splitlines(keepends=True)
+        if len(self.buffer) > MAX_LOG_LINES:
+            self.buffer = self.buffer[-MAX_LOG_LINES:]
+
+    def flush(self):
+        pass
 
 
 def start(log_path):
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    log_file = LimitedLogFile(log_path)
-    sys.stdout = Tee(sys.__stdout__, log_file)
-    sys.stderr = Tee(sys.__stderr__, log_file)
+    file_sink = None
+    if log_path:
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        file_sink = LimitedLogFile(log_path)
+    memory_sink = MemoryLogProxy() if not log_path else None
+    sys.stdout = Tee(sys.__stdout__, file_sink if file_sink is not None else memory_sink)
+    sys.stderr = Tee(sys.__stderr__, file_sink if file_sink is not None else memory_sink)
     print("[PYTHON] Chaquopy RPC bootstrap started")
     try:
         # Import after stdout/stderr redirection so logging.basicConfig in the

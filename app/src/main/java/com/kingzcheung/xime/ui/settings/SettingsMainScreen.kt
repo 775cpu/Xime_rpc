@@ -76,6 +76,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.service.BackgroundCaptureService
+import com.kingzcheung.xime.util.LauncherIconController
 import com.kingzcheung.xime.util.RpcUiController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -162,6 +163,24 @@ fun SettingsMainContent(
                             val imm = context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) 
                                 as InputMethodManager
                             imm.showInputMethodPicker()
+                        }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    var launcherIconHidden by remember { mutableStateOf(SettingsPreferences.isLauncherIconHidden(context)) }
+                    SettingsToggleItem(
+                        icon = Icons.TwoTone.ToggleOn,
+                        title = "隐藏桌面图标",
+                        subtitle = "默认隐藏；关闭后重新显示启动图标",
+                        checked = launcherIconHidden,
+                        showArrow = false,
+                        onCheckedChange = { hidden ->
+                            launcherIconHidden = hidden
+                            SettingsPreferences.setLauncherIconHidden(context, hidden)
+                            LauncherIconController.setEnabled(context, !hidden)
                         }
                     )
                     HorizontalDivider(
@@ -385,6 +404,26 @@ fun SettingsMainContent(
                         onClick = onNavigateToRpc,
                         showArrow = true
                     )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    var rpcLogToDisk by remember { mutableStateOf(SettingsPreferences.isRpcLogToDiskEnabled(context)) }
+                    SettingsToggleItem(
+                        icon = Icons.TwoTone.Description,
+                        title = "RPC 日志写磁盘",
+                        subtitle = "默认关闭，日志保存在内存中并显示在本页窗口",
+                        checked = rpcLogToDisk,
+                        showArrow = false,
+                        onCheckedChange = { enabled ->
+                            rpcLogToDisk = enabled
+                            SettingsPreferences.setRpcLogToDiskEnabled(context, enabled)
+                            if (enabled) {
+                                context.filesDir.resolve("rpc.log").parentFile?.mkdirs()
+                            }
+                        }
+                    )
                 })
             }
 
@@ -556,14 +595,20 @@ private fun InlineLogView() {
     val logBackground = uiState["log.background"]
         ?.let { value -> runCatching { Color(android.graphics.Color.parseColor(value)) }.getOrNull() }
         ?: MaterialTheme.colorScheme.surfaceVariant
+    val logToDisk = SettingsPreferences.isRpcLogToDiskEnabled(context)
+    val memoryLog = uiState["log.memory"].orEmpty()
 
     if (!logVisible) return
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(logToDisk, memoryLog) {
         while (true) {
             val content = withContext(Dispatchers.IO) {
-                File(context.filesDir, "rpc.log")
-                    .let { file -> runCatching { if (file.isFile) file.readText() else "" }.getOrDefault("") }
+                if (logToDisk) {
+                    File(context.filesDir, "rpc.log")
+                        .let { file -> runCatching { if (file.isFile) file.readText() else "" }.getOrDefault("") }
+                } else {
+                    memoryLog
+                }
             }
             if (content != logText) {
                 logText = content

@@ -13,18 +13,47 @@ import org.json.JSONObject
 import java.io.File
 
 object RpcUiController {
+    private const val MAX_LOG_CHARS = 100 * 1024
+    private const val MAX_LOG_LINES = 1000
+    private const val MEMORY_LOG_KEY = "log.memory"
+
     private var context: Context? = null
     private val _state = MutableStateFlow<Map<String, String>>(emptyMap())
     val state: StateFlow<Map<String, String>> = _state.asStateFlow()
 
     fun initialize(appContext: Context) {
         context = appContext.applicationContext
+        if (_state.value[MEMORY_LOG_KEY].isNullOrBlank()) {
+            _state.value = _state.value + (MEMORY_LOG_KEY to "")
+        }
     }
 
     @JvmStatic
     fun setState(key: String, value: String) {
         require(key.isNotBlank()) { "UI state key must not be blank" }
         _state.update { it + (key to value) }
+    }
+
+    @JvmStatic
+    fun appendLog(message: String) {
+        if (message.isBlank()) return
+        _state.update { current ->
+            val previous = current[MEMORY_LOG_KEY].orEmpty()
+            val combined = (previous + message)
+            val lines = combined.split('\n')
+            val trimmed = if (lines.size > MAX_LOG_LINES) {
+                lines.takeLast(MAX_LOG_LINES)
+            } else {
+                lines
+            }.joinToString("\n")
+            val bounded = if (trimmed.length > MAX_LOG_CHARS) trimmed.takeLast(MAX_LOG_CHARS) else trimmed
+            current + (MEMORY_LOG_KEY to bounded)
+        }
+    }
+
+    @JvmStatic
+    fun clearLog() {
+        _state.update { it + (MEMORY_LOG_KEY to "") }
     }
 
     @JvmStatic

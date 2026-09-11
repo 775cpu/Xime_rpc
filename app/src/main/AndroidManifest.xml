@@ -54,10 +54,6 @@
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/Theme.Xime">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <!-- 接收其他应用分享的 .yaml / .zip 文件 -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -66,6 +62,17 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+
+        <activity-alias
+            android:name=".LauncherAlias"
+            android:targetActivity=".MainActivity"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
         
         <!-- 输入法服务 -->
         <service
