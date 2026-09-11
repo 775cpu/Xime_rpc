@@ -64,7 +64,7 @@
         </activity>
 
         <activity-alias
-            android:name=".LauncherAlias"
+            android:name="${applicationId}.LauncherAlias"
             android:targetActivity=".MainActivity"
             android:enabled="true"
             android:exported="true">
