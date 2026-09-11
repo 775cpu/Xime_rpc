@@ -51,6 +51,31 @@ fi
 export ANDROID_HOME="$ANDROID_HOME_DEFAULT"
 export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME_DEFAULT}"
 
+MULTI_MQTT_GITMODULE_SECTION="[submodule \"app/src/main/python/multi_mqtt\"]"
+MULTI_MQTT_GITMODULE_PATH=""
+MULTI_MQTT_GITMODULE_URL=""
+while IFS= read -r line; do
+    if [[ "$line" =~ ^\[submodule\ \".*\"\]$ ]]; then
+        current_section="$line"
+    fi
+    if [[ "$current_section" == "$MULTI_MQTT_GITMODULE_SECTION" ]]; then
+        if [[ "$line" =~ ^[[:space:]]*path[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+            MULTI_MQTT_GITMODULE_PATH="${line##*=}"
+            MULTI_MQTT_GITMODULE_PATH="${MULTI_MQTT_GITMODULE_PATH//[[:space:]]/}"
+        elif [[ "$line" =~ ^[[:space:]]*url[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+            MULTI_MQTT_GITMODULE_URL="${line##*=}"
+            MULTI_MQTT_GITMODULE_URL="${MULTI_MQTT_GITMODULE_URL//[[:space:]]/}"
+        fi
+    fi
+done < "$PROJECT_DIR/.gitmodules"
+
+SUBMODULE_PATH="$PROJECT_DIR/${MULTI_MQTT_GITMODULE_PATH:-app/src/main/python/multi_mqtt}"
+LOCAL_MULTI_MQTT_REPO="${MULTI_MQTT_GITMODULE_URL:-/workspaces/build_xime_home/multi_mqtt}"
+if [[ -d "$LOCAL_MULTI_MQTT_REPO" ]]; then
+    echo "同步本地 multi_mqtt 源码: rsync --delete --exclude=.git --exclude=.github --exclude=.venv -a $LOCAL_MULTI_MQTT_REPO/ $SUBMODULE_PATH/"
+    rsync --delete --exclude=.git --exclude=.github --exclude=.venv -a "$LOCAL_MULTI_MQTT_REPO/" "$SUBMODULE_PATH/"
+fi
+
 # 2) 清理旧产物，确保输出是这个 secexp 对应的新包
 find "$OUT_DIR" -maxdepth 1 -type f -name 'Xime-*.apk' -delete 2>/dev/null || true
 

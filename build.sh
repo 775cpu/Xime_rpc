@@ -147,6 +147,31 @@ if [[ -d /usr/lib/jvm/java-17-openjdk-amd64 ]]; then
     export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
 fi
 
+MULTI_MQTT_GITMODULE_SECTION="[submodule \"app/src/main/python/multi_mqtt\"]"
+MULTI_MQTT_GITMODULE_PATH=""
+MULTI_MQTT_GITMODULE_URL=""
+while IFS= read -r line; do
+    if [[ "$line" =~ ^\[submodule\ \".*\"\]$ ]]; then
+        current_section="$line"
+    fi
+    if [[ "$current_section" == "$MULTI_MQTT_GITMODULE_SECTION" ]]; then
+        if [[ "$line" =~ ^[[:space:]]*path[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+            MULTI_MQTT_GITMODULE_PATH="${line##*=}"
+            MULTI_MQTT_GITMODULE_PATH="${MULTI_MQTT_GITMODULE_PATH//[[:space:]]/}"
+        elif [[ "$line" =~ ^[[:space:]]*url[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+            MULTI_MQTT_GITMODULE_URL="${line##*=}"
+            MULTI_MQTT_GITMODULE_URL="${MULTI_MQTT_GITMODULE_URL//[[:space:]]/}"
+        fi
+    fi
+done < "$PWD/.gitmodules"
+
+SUBMODULE_PATH="$PWD/${MULTI_MQTT_GITMODULE_PATH:-app/src/main/python/multi_mqtt}"
+LOCAL_MULTI_MQTT_REPO="${MULTI_MQTT_GITMODULE_URL:-/workspaces/build_xime_home/multi_mqtt}"
+if [[ -d "$LOCAL_MULTI_MQTT_REPO" ]]; then
+    echo "同步本地 multi_mqtt 源码: rsync --delete --exclude=.git --exclude=.github --exclude=.venv -a $LOCAL_MULTI_MQTT_REPO/ $SUBMODULE_PATH/"
+    rsync --delete --exclude=.git --exclude=.github --exclude=.venv -a "$LOCAL_MULTI_MQTT_REPO/" "$SUBMODULE_PATH/"
+fi
+
 git submodule update --init --recursive
 
 ensure_native_dependency() {
