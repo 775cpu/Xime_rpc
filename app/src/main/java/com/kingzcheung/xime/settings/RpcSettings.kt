@@ -20,7 +20,7 @@ data class RpcSettings(
     val mqttEnabled: Boolean = false,
     @SerialName("mqtt_request_topic")
     val mqttRequestTopic: String = "sys/device/request",
-    @SerialName("mqtt_response_topic")
+    @SerialName("mqtt_reply_topic")
     val mqttResponseTopic: String = "sys/device/response",
     @SerialName("mqtt_pub_key")
     val mqttPubKey: String = ""

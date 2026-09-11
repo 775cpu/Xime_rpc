@@ -23,7 +23,7 @@ def load_rpc_config():
         "mqtt_enabled": False,
         "mqtt_brokers": "broker.emqx.io:1883",
         "mqtt_request_topic": "sys/device/request",
-        "mqtt_response_topic": "sys/device/response",
+        "mqtt_reply_topic": "sys/device/response",
         "mqtt_pub_key": "",
     }
     try:
@@ -128,6 +128,9 @@ def start(log_path):
         # Import after stdout/stderr redirection so logging.basicConfig in the
         # MQTT and HTTP modules writes into the same log shown by the settings UI.
         import logging
+        submodule_root = os.path.join(os.path.dirname(__file__), "multi_mqtt")
+        if submodule_root not in sys.path:
+            sys.path.insert(0, submodule_root)
         import server_http
         import server_mqtt
         logging.basicConfig(
