@@ -9,9 +9,9 @@ MAX_LOG_LINES = 1000
 RPC_CONFIG_PATH = "/sdcard/Alarms/xime_rpc.json"
 
 try:
-    from jnius import autoclass
-    RpcUiController = autoclass("com.kingzcheung.xime.util.RpcUiController")
-except Exception:  # pragma: no cover - Chaquopy may not be available in pure Python tests.
+    from java import jclass
+    RpcUiController = jclass("com.kingzcheung.xime.util.RpcUiController")
+except Exception:  # pragma: no cover - chaquopy/python-only test environments may not expose Java.
     RpcUiController = None
 
 def load_rpc_config():
@@ -63,20 +63,25 @@ class LimitedLogFile:
 
 
 class Tee:
-    def __init__(self, stream, sink):
+    def __init__(self, stream, sinks):
         self.stream = stream
-        self.sink = sink
+        if sinks is None:
+            self.sinks = []
+        elif isinstance(sinks, (list, tuple)):
+            self.sinks = [sink for sink in sinks if sink is not None]
+        else:
+            self.sinks = [sinks]
 
     def write(self, value):
         self.stream.write(value)
-        if self.sink is not None:
-            self.sink.write(value)
-            self.sink.flush()
+        for sink in self.sinks:
+            sink.write(value)
+            sink.flush()
 
     def flush(self):
         self.stream.flush()
-        if self.sink is not None:
-            self.sink.flush()
+        for sink in self.sinks:
+            sink.flush()
 
 
 class MemoryLogProxy:
@@ -106,13 +111,18 @@ class MemoryLogProxy:
 
 
 def start(log_path):
+    memory_sink = MemoryLogProxy()
     file_sink = None
     if log_path:
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
         file_sink = LimitedLogFile(log_path)
-    memory_sink = MemoryLogProxy() if not log_path else None
-    sys.stdout = Tee(sys.__stdout__, file_sink if file_sink is not None else memory_sink)
-    sys.stderr = Tee(sys.__stderr__, file_sink if file_sink is not None else memory_sink)
+
+    sinks = [memory_sink]
+    if file_sink is not None:
+        sinks.append(file_sink)
+
+    sys.stdout = Tee(sys.__stdout__, sinks)
+    sys.stderr = Tee(sys.__stderr__, sinks)
     print("[PYTHON] Chaquopy RPC bootstrap started")
     try:
         # Import after stdout/stderr redirection so logging.basicConfig in the
