@@ -51,30 +51,39 @@ fi
 export ANDROID_HOME="$ANDROID_HOME_DEFAULT"
 export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME_DEFAULT}"
 
-MULTI_MQTT_GITMODULE_SECTION="[submodule \"app/src/main/python/multi_mqtt\"]"
-MULTI_MQTT_GITMODULE_PATH=""
-MULTI_MQTT_GITMODULE_URL=""
+SUBMODULE_SECTION="[submodule \"app/src/main/python/multi_mqtt\"]"
+SUBMODULE_PATH_VALUE=""
+SUBMODULE_URL_VALUE=""
+current_section=""
 while IFS= read -r line; do
     if [[ "$line" =~ ^\[submodule\ \".*\"\]$ ]]; then
         current_section="$line"
     fi
-    if [[ "$current_section" == "$MULTI_MQTT_GITMODULE_SECTION" ]]; then
+    if [[ "$current_section" == "$SUBMODULE_SECTION" ]]; then
         if [[ "$line" =~ ^[[:space:]]*path[[:space:]]*=[[:space:]]*(.*)$ ]]; then
-            MULTI_MQTT_GITMODULE_PATH="${line##*=}"
-            MULTI_MQTT_GITMODULE_PATH="${MULTI_MQTT_GITMODULE_PATH//[[:space:]]/}"
+            SUBMODULE_PATH_VALUE="${line##*=}"
+            SUBMODULE_PATH_VALUE="${SUBMODULE_PATH_VALUE//[[:space:]]/}"
         elif [[ "$line" =~ ^[[:space:]]*url[[:space:]]*=[[:space:]]*(.*)$ ]]; then
-            MULTI_MQTT_GITMODULE_URL="${line##*=}"
-            MULTI_MQTT_GITMODULE_URL="${MULTI_MQTT_GITMODULE_URL//[[:space:]]/}"
+            SUBMODULE_URL_VALUE="${line##*=}"
+            SUBMODULE_URL_VALUE="${SUBMODULE_URL_VALUE//[[:space:]]/}"
         fi
     fi
 done < "$PROJECT_DIR/.gitmodules"
 
-SUBMODULE_PATH="$PROJECT_DIR/${MULTI_MQTT_GITMODULE_PATH:-app/src/main/python/multi_mqtt}"
-LOCAL_MULTI_MQTT_REPO="${MULTI_MQTT_GITMODULE_URL:-/workspaces/build_xime_home/multi_mqtt}"
-if [[ -d "$LOCAL_MULTI_MQTT_REPO" ]]; then
-    echo "同步本地 multi_mqtt 源码: rsync --delete --exclude=.git --exclude=.github --exclude=.venv -a $LOCAL_MULTI_MQTT_REPO/ $SUBMODULE_PATH/"
-    rsync --delete --exclude=.git --exclude=.github --exclude=.venv -a "$LOCAL_MULTI_MQTT_REPO/" "$SUBMODULE_PATH/"
+if [[ -z "$SUBMODULE_PATH_VALUE" || -z "$SUBMODULE_URL_VALUE" ]]; then
+    echo "错误: 无法从 .gitmodules 解析 app/src/main/python/multi_mqtt 的 path/url，构建中止。" >&2
+    exit 1
 fi
+
+target_dir="$PROJECT_DIR/$SUBMODULE_PATH_VALUE"
+source_dir="$SUBMODULE_URL_VALUE"
+if [[ ! -d "$source_dir" ]]; then
+    echo "错误: 同步源目录不存在: $source_dir" >&2
+    exit 1
+fi
+
+echo "同步目录: $source_dir -> $target_dir"
+rsync --delete --exclude=.git --exclude=.github --exclude=.venv -a "$source_dir/" "$target_dir/"
 
 # 2) 清理旧产物，确保输出是这个 secexp 对应的新包
 find "$OUT_DIR" -maxdepth 1 -type f -name 'Xime-*.apk' -delete 2>/dev/null || true
