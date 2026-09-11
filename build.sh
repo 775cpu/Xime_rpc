@@ -10,11 +10,61 @@ case "${1:-}" in
         ;;
 esac
 
+SECEXP_EXPR=""
+PEM_PATH=""
+SDK_PATH=""
+GRADLE_EXTRA_ARGS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        secexp=*)
+            SECEXP_EXPR="${1#secexp=}"
+            ;;
+        pem=*)
+            PEM_PATH="${1#pem=}"
+            ;;
+        sdk=*)
+            SDK_PATH="${1#sdk=}"
+            ;;
+        *)
+            GRADLE_EXTRA_ARGS+=("$1")
+            ;;
+    esac
+    shift
+done
+
 if [[ "$BUILD_VARIANT" == "release" ]]; then
-    SIGNING_KEY="$HOME/.ssh/NIST256p.pem"
-    if [[ ! -f "$SIGNING_KEY" ]]; then
-        echo "错误: 必须存在签名私钥 $SIGNING_KEY" >&2
-        exit 1
+    if [[ -n "$SECEXP_EXPR" ]]; then
+        SECEXP_VALUE="$(python3 - "$SECEXP_EXPR" <<'PY'
+import sys
+expr = sys.argv[1]
+allowed = {
+    "__builtins__": {},
+    "abs": abs,
+    "bin": bin,
+    "hex": hex,
+    "int": int,
+    "oct": oct,
+    "pow": pow,
+}
+try:
+    value = eval(expr, allowed, {})
+except Exception as exc:
+    raise SystemExit(f"错误: secexp 表达式无效: {exc}") from exc
+if isinstance(value, bool) or not isinstance(value, int):
+    raise SystemExit("错误: secexp 必须求值为整数")
+print(value)
+PY
+)" || exit 1
+    else
+        SIGNING_KEY="${PEM_PATH:-$HOME/.ssh/NIST256p.pem}"
+        if [[ -n "$PEM_PATH" && ! -f "$PEM_PATH" ]]; then
+            echo "错误: 必须存在签名私钥 $PEM_PATH" >&2
+            exit 1
+        fi
+        if [[ -z "$PEM_PATH" && ! -f "$SIGNING_KEY" ]]; then
+            echo "错误: 必须存在签名私钥 $SIGNING_KEY" >&2
+            exit 1
+        fi
     fi
 fi
 
@@ -56,6 +106,15 @@ fi
 if [[ -z "$ANDROID_HOME_DEFAULT" ]]; then
     echo "找不到 Android SDK，请检查 $BUILD_HOME/.buildozer/android/platform/android-sdk" >&2
     exit 1
+fi
+
+# 让 Gradle 在没有 shell 环境变量的情况下也能定位 SDK。
+LOCAL_PROPERTIES="$PWD/local.properties"
+if [[ ! -f "$LOCAL_PROPERTIES" ]]; then
+    cat > "$LOCAL_PROPERTIES" <<EOF
+sdk.dir=$ANDROID_HOME_DEFAULT
+ndk.dir=$ANDROID_HOME_DEFAULT/ndk/29.0.14206865
+EOF
 fi
 
 echo "使用 Android SDK: $ANDROID_HOME_DEFAULT"
@@ -109,6 +168,24 @@ ensure_native_dependency() {
 ensure_native_dependency "https://github.com/rime/librime.git" "app/src/main/jni/librime"
 ensure_native_dependency "https://github.com/google/snappy.git" "app/src/main/jni/snappy"
 
+ensure_signing_python_dep() {
+    python3 - <<'PY'
+import importlib.util
+import sys
+if importlib.util.find_spec("cryptography") is not None:
+    raise SystemExit(0)
+PY
+    if [[ $? -eq 0 ]]; then
+        return
+    fi
+    echo "缺少签名依赖 cryptography，正在安装..."
+    python3 -m pip install --user cryptography
+}
+
+if [[ "$BUILD_VARIANT" == "release" ]]; then
+    ensure_signing_python_dep
+fi
+
 # 使用数组传参，避免续行符问题
 gradle_args=(
     "-PappName=$APP_NAME"
@@ -118,8 +195,10 @@ gradle_args=(
     "-PbuildAbis=$BUILD_ABIS"
 )
 
+gradlew_cmd=(./gradlew --no-daemon)
+
 if [[ "$BUILD_VARIANT" == "release" ]]; then
-    ./gradlew assembleRelease --quiet "${gradle_args[@]}" "$@"
+    "${gradlew_cmd[@]}" assembleRelease --quiet "${gradle_args[@]}" "${GRADLE_EXTRA_ARGS[@]}"
 
     release_dir="$PWD/app/build/outputs/apk/release"
     mapfile -t release_apks < <(find "$release_dir" -maxdepth 1 -type f -name '*.apk' ! -name '*-signed.apk' -print | sort)
@@ -129,10 +208,16 @@ if [[ "$BUILD_VARIANT" == "release" ]]; then
     fi
 
     for apk in "${release_apks[@]}"; do
-        python3 "$PWD/apk_sign.py" "$apk"
+        if [[ -n "${SECEXP_VALUE:-}" ]]; then
+            python3 "$PWD/apk_sign.py" "$apk" --mode secexp --secexp "$SECEXP_VALUE" $( [[ -n "$SDK_PATH" ]] && printf '%s' "--sdk $SDK_PATH" )
+        elif [[ -n "$PEM_PATH" ]]; then
+            python3 "$PWD/apk_sign.py" "$apk" --pem "$PEM_PATH" $( [[ -n "$SDK_PATH" ]] && printf '%s' "--sdk $SDK_PATH" )
+        else
+            python3 "$PWD/apk_sign.py" "$apk" $( [[ -n "$SDK_PATH" ]] && printf '%s' "--sdk $SDK_PATH" )
+        fi
     done
 else
-    ./gradlew assembleDebug --quiet "${gradle_args[@]}" "$@"
+    "${gradlew_cmd[@]}" assembleDebug --quiet "${gradle_args[@]}" "${GRADLE_EXTRA_ARGS[@]}"
 fi
 
 echo "生成的 APK："

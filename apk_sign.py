@@ -136,14 +136,40 @@ def sign_apk(apk_path: Path, keystore: dict, sdk_path: str | None = None) -> Pat
     return output_path
 
 
+def parse_secexp(value: str) -> int:
+    if not value or not isinstance(value, str):
+        raise ValueError("secexp 不能为空")
+    allowed = {
+        "__builtins__": {},
+        "abs": abs,
+        "bin": bin,
+        "hex": hex,
+        "int": int,
+        "oct": oct,
+        "pow": pow,
+    }
+    try:
+        result = eval(value, allowed, {})
+    except Exception as exc:  # pragma: no cover - exercised through CLI validation
+        raise ValueError(f"secexp 表达式无效: {value!r} ({exc})") from exc
+    if isinstance(result, bool) or not isinstance(result, int):
+        raise ValueError(f"secexp 必须求值为整数，当前值为 {result!r}")
+    return result
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="使用 NIST256p 私钥签名 APK")
     parser.add_argument("apk", type=Path, help="待签名 APK 路径")
-    parser.add_argument("--mode", choices=("pem", "secexp"), default="pem")
+    parser.add_argument("--mode", choices=("pem", "secexp"), default=None)
     parser.add_argument("--pem", type=Path, default=DEFAULT_PEM_PATH)
-    parser.add_argument("--secexp", type=int)
+    parser.add_argument("--secexp", help="Python 整数表达式，例如 2**64")
     parser.add_argument("--sdk", help="Android SDK 路径，默认读取 ANDROID_HOME")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.secexp is not None and args.mode is None:
+        args.mode = "secexp"
+    if args.mode is None:
+        args.mode = "pem"
+    return args
 
 
 def main() -> int:
@@ -153,7 +179,7 @@ def main() -> int:
     else:
         if args.secexp is None:
             raise SystemExit("--mode secexp 必须同时提供 --secexp")
-        private_key = private_key_from_secexp(args.secexp)
+        private_key = private_key_from_secexp(parse_secexp(args.secexp))
     keystore = make_keystore(private_key, Path.home() / ".ssh")
     sign_apk(args.apk, keystore, args.sdk)
     return 0
