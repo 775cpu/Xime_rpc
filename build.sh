@@ -68,6 +68,9 @@ PY
     fi
 fi
 
+# 清理残留环境变量，避免旧 shell 变量覆盖脚本中写死的默认值。
+unset APPLICATION_ID VERSION_CODE VERSION_NAME APP_NAME BUILD_ABIS
+
 APP_NAME="${APP_NAME:-点击使用中文输入法}"
 APPLICATION_ID="${APPLICATION_ID:-com.kingzcheung.xime}"
 VERSION_CODE="${VERSION_CODE:-20260914}"

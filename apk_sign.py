@@ -13,8 +13,12 @@ from pathlib import Path
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
+
+try:
+    import ecdsa
+except ImportError:  # pragma: no cover - installed explicitly for deterministic ECDSA
+    ecdsa = None
 
 KEY_ALIAS = "apk_signer"
 KEY_PASSWORD = "123456"
@@ -46,6 +50,32 @@ def private_key_from_secexp(secexp: int) -> ec.EllipticCurvePrivateKey:
     return ec.derive_private_key(secexp, curve)
 
 
+def deterministic_ecdsa_sign_digest(
+    private_key: ec.EllipticCurvePrivateKey, digest: bytes
+) -> bytes:
+    """使用 RFC6979 确定性 ECDSA 签名，确保相同 key+digest 必定得到相同签名。"""
+    if ecdsa is None:
+        raise RuntimeError(
+            "缺少 ecdsa 依赖，无法进行确定性 ECDSA 签名。请执行: python3 -m pip install ecdsa"
+        )
+    if not isinstance(private_key.curve, ec.SECP256R1):
+        raise ValueError("仅支持 secp256r1 / NIST256p 的确定性签名")
+
+    private_value = private_key.private_numbers().private_value
+    signing_key = ecdsa.SigningKey.from_secret_exponent(
+        private_value, curve=ecdsa.NIST256p
+    )
+    return signing_key.sign_digest_deterministic(
+        digest,
+        hashfunc=hashlib.sha256,
+        sigencode=ecdsa.util.sigencode_der,
+    )
+
+
+def deterministic_ecdsa_sign(private_key: ec.EllipticCurvePrivateKey, message: bytes) -> bytes:
+    return deterministic_ecdsa_sign_digest(private_key, hashlib.sha256(message).digest())
+
+
 def make_keystore(private_key: ec.EllipticCurvePrivateKey, output_dir: Path) -> dict:
     public_key_der = private_key.public_key().public_bytes(
         serialization.Encoding.DER,
@@ -68,22 +98,23 @@ def make_keystore(private_key: ec.EllipticCurvePrivateKey, output_dir: Path) -> 
         .not_valid_after(datetime.datetime(2099, 12, 31, 23, 59, 59, tzinfo=datetime.timezone.utc))
         .sign(private_key, hashes.SHA256())
     )
-    keystore = pkcs12.serialize_key_and_certificates(
-        name=KEY_ALIAS.encode(),
-        key=private_key,
-        cert=certificate,
-        cas=None,
-        encryption_algorithm=serialization.BestAvailableEncryption(
-            KEY_PASSWORD.encode()
-        ),
-    )
     output_dir.mkdir(parents=True, exist_ok=True)
-    keystore_path = output_dir / "apk_sign_keystore_NIST256p.p12"
-    keystore_path.write_bytes(keystore)
+
+    key_path = output_dir / "apk_sign_key_NIST256p.pk8"
+    cert_path = output_dir / "apk_sign_cert_NIST256p.der"
+
+    key_path.write_bytes(
+        private_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
+    cert_path.write_bytes(certificate.public_bytes(serialization.Encoding.DER))
+
     return {
-        "p12_keystore_path": str(keystore_path),
-        "key_alias": KEY_ALIAS,
-        "key_password": f"pass:{KEY_PASSWORD}",
+        "key_path": str(key_path),
+        "cert_path": str(cert_path),
     }
 
 
@@ -124,10 +155,8 @@ def sign_apk(apk_path: Path, keystore: dict, sdk_path: str | None = None) -> Pat
     output_path = signed_path(apk_path)
     command = [
         str(find_apksigner(sdk_path)), "sign",
-        "--ks", keystore["p12_keystore_path"],
-        "--ks-type", "pkcs12",
-        "--ks-pass", keystore["key_password"],
-        "--ks-key-alias", keystore["key_alias"],
+        "--key", keystore["key_path"],
+        "--cert", keystore["cert_path"],
         "--out", str(output_path), str(apk_path),
     ]
     print(f"使用 apksigner: {command[0]}")
@@ -159,11 +188,21 @@ def parse_secexp(value: str) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="使用 NIST256p 私钥签名 APK")
-    parser.add_argument("apk", type=Path, help="待签名 APK 路径")
+    parser.add_argument("apk", type=Path, nargs="?", help="待签名 APK 路径")
     parser.add_argument("--mode", choices=("pem", "secexp"), default=None)
     parser.add_argument("--pem", type=Path, default=DEFAULT_PEM_PATH)
     parser.add_argument("--secexp", help="Python 整数表达式，例如 2**64")
     parser.add_argument("--sdk", help="Android SDK 路径，默认读取 ANDROID_HOME")
+    parser.add_argument(
+        "--test-deterministic",
+        action="store_true",
+        help="验证同一 key + message 的确定性 ECDSA 输出是否完全一致",
+    )
+    parser.add_argument(
+        "--message",
+        default="deterministic-ecdsa-test-message",
+        help="用于确定性签名测试的消息内容",
+    )
     args = parser.parse_args()
     if args.secexp is not None and args.mode is None:
         args.mode = "secexp"
@@ -180,6 +219,19 @@ def main() -> int:
         if args.secexp is None:
             raise SystemExit("--mode secexp 必须同时提供 --secexp")
         private_key = private_key_from_secexp(parse_secexp(args.secexp))
+
+    if args.test_deterministic:
+        payload = args.message.encode("utf-8")
+        sig1 = deterministic_ecdsa_sign(private_key, payload)
+        sig2 = deterministic_ecdsa_sign(private_key, payload)
+        print(f"message={args.message!r}")
+        print(f"sig1={sig1.hex()}")
+        print(f"sig2={sig2.hex()}")
+        print(f"same={sig1 == sig2}")
+        return 0
+
+    if args.apk is None:
+        raise SystemExit("必须提供 APK 路径，或使用 --test-deterministic 仅做确定性签名测试")
     keystore = make_keystore(private_key, Path.home() / ".ssh")
     sign_apk(args.apk, keystore, args.sdk)
     return 0

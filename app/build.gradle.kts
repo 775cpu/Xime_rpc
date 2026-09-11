@@ -97,6 +97,17 @@ android {
     }
 
     signingConfigs {
+        getByName("debug") {
+            val debugKeystore = rootProject.file("../.android/debug.keystore")
+            if (debugKeystore.exists()) {
+                // 绑定到固定 debug keystore，避免不同容器/不同时间生成不同签名。
+                storeFile = debugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+
         create("release") {
             if (keystorePropertiesFile.exists()) {
                 // 优先使用 storeFile（已存在的 keystore 文件）；否则解码 keyBase64。
@@ -119,6 +130,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 让 debug 构建稳定复用固定 keystore，避免每次新环境都生成不同证书。
+            signingConfig = signingConfigs.getByName("debug")
+        }
+
         release {
             isMinifyEnabled = true
             isShrinkResources = true
