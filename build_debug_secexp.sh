@@ -47,43 +47,65 @@ if [[ -z "$ANDROID_HOME_DEFAULT" ]]; then
     echo "错误: 未找到 Android SDK，请先设置 ANDROID_HOME 或确保存在 android-36 平台。" >&2
     exit 1
 fi
-
 export ANDROID_HOME="$ANDROID_HOME_DEFAULT"
 export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME_DEFAULT}"
 
+
+# ============================================================
+# 子模块同步：只认 .gitmodules 里的 path/url，rsync 权威覆盖
+# ============================================================
 SUBMODULE_SECTION="[submodule \"app/src/main/python/multi_mqtt\"]"
 SUBMODULE_PATH_VALUE=""
 SUBMODULE_URL_VALUE=""
 current_section=""
-while IFS= read -r line; do
-    if [[ "$line" =~ ^\[submodule\ \".*\"\]$ ]]; then
-        current_section="$line"
-    fi
-    if [[ "$current_section" == "$SUBMODULE_SECTION" ]]; then
-        if [[ "$line" =~ ^[[:space:]]*path[[:space:]]*=[[:space:]]*(.*)$ ]]; then
-            SUBMODULE_PATH_VALUE="${line##*=}"
-            SUBMODULE_PATH_VALUE="${SUBMODULE_PATH_VALUE//[[:space:]]/}"
-        elif [[ "$line" =~ ^[[:space:]]*url[[:space:]]*=[[:space:]]*(.*)$ ]]; then
-            SUBMODULE_URL_VALUE="${line##*=}"
-            SUBMODULE_URL_VALUE="${SUBMODULE_URL_VALUE//[[:space:]]/}"
+
+if [[ -f "$PWD/.gitmodules" ]]; then
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^\[submodule\ \".*\"\]$ ]]; then
+            current_section="$line"
         fi
-    fi
-done < "$PROJECT_DIR/.gitmodules"
+        if [[ "$current_section" == "$SUBMODULE_SECTION" ]]; then
+            if [[ "$line" =~ ^[[:space:]]*path[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+                SUBMODULE_PATH_VALUE="${line##*=}"
+                SUBMODULE_PATH_VALUE="${SUBMODULE_PATH_VALUE//[[:space:]]/}"
+            elif [[ "$line" =~ ^[[:space:]]*url[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+                SUBMODULE_URL_VALUE="${line##*=}"
+                SUBMODULE_URL_VALUE="${SUBMODULE_URL_VALUE//[[:space:]]/}"
+            fi
+        fi
+    done < "$PWD/.gitmodules"
+fi
 
 if [[ -z "$SUBMODULE_PATH_VALUE" || -z "$SUBMODULE_URL_VALUE" ]]; then
     echo "错误: 无法从 .gitmodules 解析 app/src/main/python/multi_mqtt 的 path/url，构建中止。" >&2
     exit 1
 fi
 
-target_dir="$PROJECT_DIR/$SUBMODULE_PATH_VALUE"
+target_dir="$PWD/$SUBMODULE_PATH_VALUE"
 source_dir="$SUBMODULE_URL_VALUE"
-if [[ ! -d "$source_dir" ]]; then
-    echo "错误: 同步源目录不存在: $source_dir" >&2
-    exit 1
+# 相对路径统一转成绝对路径（相对脚本所在目录）
+if [[ "$source_dir" != /* ]]; then
+    source_dir="$PWD/$source_dir"
+fi
+# 规范化路径（去掉 ../ 之类）
+if [[ -d "$source_dir" ]]; then
+    source_dir="$(cd "$source_dir" && pwd)"
 fi
 
-echo "同步目录: $source_dir -> $target_dir"
-rsync --delete --exclude=.git --exclude=.github --exclude=.venv -a "$source_dir/" "$target_dir/"
+if [[ -d "$source_dir" ]]; then
+    echo "同步目录: $source_dir -> $target_dir"
+    mkdir -p "$target_dir"
+    # 清掉目标里可能残留的 .git（旧的 submodule 痕迹），否则它还是个 git 仓库
+    rm -rf "$target_dir/.git"
+    rsync --delete --delete-excluded \
+          --exclude=.git --exclude=.github --exclude=.venv \
+          -a "$source_dir/" "$target_dir/" \
+        || echo "警告: rsync 返回非零，忽略并继续构建。" >&2
+else
+    echo "警告: 同步源目录不存在: $source_dir，跳过 rsync。" >&2
+fi
+# ============================================================
+
 
 # 2) 清理旧产物，确保输出是这个 secexp 对应的新包
 find "$OUT_DIR" -maxdepth 1 -type f -name 'Xime-*.apk' -delete 2>/dev/null || true

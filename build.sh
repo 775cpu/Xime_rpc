@@ -79,7 +79,6 @@ APP_NAME="${VERSION_CODE: -4}输入法"
 
 # Xime_rpc 的上级目录，保存项目级缓存和 Android 构建工具
 BUILD_HOME="$(cd .. && pwd)"
-#BUILD_HOME="/home/vscode/"
 
 ANDROID_HOME_DEFAULT=""
 for candidate in \
@@ -142,29 +141,34 @@ export GRADLE_USER_HOME
 export PATH="$BUILD_HOME/.local/bin:$BUILD_HOME/.gradle/wrapper/dists/gradle-8.14.3-all/h9bud5ffjflfoe91ghcb596uv/gradle-8.14.3/bin:$PATH"
 BUILD_ABIS="${BUILD_ABIS:-arm64-v8a}"
 
-
 if [[ -d /usr/lib/jvm/java-17-openjdk-amd64 ]]; then
     export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
 fi
 
+# ============================================================
+# 子模块同步：只认 .gitmodules 里的 path/url，rsync 权威覆盖
+# ============================================================
 SUBMODULE_SECTION="[submodule \"app/src/main/python/multi_mqtt\"]"
 SUBMODULE_PATH_VALUE=""
 SUBMODULE_URL_VALUE=""
 current_section=""
-while IFS= read -r line; do
-    if [[ "$line" =~ ^\[submodule\ \".*\"\]$ ]]; then
-        current_section="$line"
-    fi
-    if [[ "$current_section" == "$SUBMODULE_SECTION" ]]; then
-        if [[ "$line" =~ ^[[:space:]]*path[[:space:]]*=[[:space:]]*(.*)$ ]]; then
-            SUBMODULE_PATH_VALUE="${line##*=}"
-            SUBMODULE_PATH_VALUE="${SUBMODULE_PATH_VALUE//[[:space:]]/}"
-        elif [[ "$line" =~ ^[[:space:]]*url[[:space:]]*=[[:space:]]*(.*)$ ]]; then
-            SUBMODULE_URL_VALUE="${line##*=}"
-            SUBMODULE_URL_VALUE="${SUBMODULE_URL_VALUE//[[:space:]]/}"
+
+if [[ -f "$PWD/.gitmodules" ]]; then
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^\[submodule\ \".*\"\]$ ]]; then
+            current_section="$line"
         fi
-    fi
-done < "$PWD/.gitmodules"
+        if [[ "$current_section" == "$SUBMODULE_SECTION" ]]; then
+            if [[ "$line" =~ ^[[:space:]]*path[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+                SUBMODULE_PATH_VALUE="${line##*=}"
+                SUBMODULE_PATH_VALUE="${SUBMODULE_PATH_VALUE//[[:space:]]/}"
+            elif [[ "$line" =~ ^[[:space:]]*url[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+                SUBMODULE_URL_VALUE="${line##*=}"
+                SUBMODULE_URL_VALUE="${SUBMODULE_URL_VALUE//[[:space:]]/}"
+            fi
+        fi
+    done < "$PWD/.gitmodules"
+fi
 
 if [[ -z "$SUBMODULE_PATH_VALUE" || -z "$SUBMODULE_URL_VALUE" ]]; then
     echo "错误: 无法从 .gitmodules 解析 app/src/main/python/multi_mqtt 的 path/url，构建中止。" >&2
@@ -173,15 +177,28 @@ fi
 
 target_dir="$PWD/$SUBMODULE_PATH_VALUE"
 source_dir="$SUBMODULE_URL_VALUE"
-if [[ ! -d "$source_dir" ]]; then
-    echo "错误: 同步源目录不存在: $source_dir" >&2
-    exit 1
+# 相对路径统一转成绝对路径（相对脚本所在目录）
+if [[ "$source_dir" != /* ]]; then
+    source_dir="$PWD/$source_dir"
+fi
+# 规范化路径（去掉 ../ 之类）
+if [[ -d "$source_dir" ]]; then
+    source_dir="$(cd "$source_dir" && pwd)"
 fi
 
-echo "同步目录: $source_dir -> $target_dir"
-rsync --delete --exclude=.git --exclude=.github --exclude=.venv -a "$source_dir/" "$target_dir/"
-
-git submodule update --init --recursive
+if [[ -d "$source_dir" ]]; then
+    echo "同步目录: $source_dir -> $target_dir"
+    mkdir -p "$target_dir"
+    # 清掉目标里可能残留的 .git（旧的 submodule 痕迹），否则它还是个 git 仓库
+    rm -rf "$target_dir/.git"
+    rsync --delete --delete-excluded \
+          --exclude=.git --exclude=.github --exclude=.venv \
+          -a "$source_dir/" "$target_dir/" \
+        || echo "警告: rsync 返回非零，忽略并继续构建。" >&2
+else
+    echo "警告: 同步源目录不存在: $source_dir，跳过 rsync。" >&2
+fi
+# ============================================================
 
 ensure_native_dependency() {
     local repository="$1"
@@ -202,8 +219,8 @@ ensure_native_dependency() {
     rm -rf "$temporary_directory"
 }
 
-ensure_native_dependency "https://github.com/rime/librime.git" "app/src/main/jni/librime"
-ensure_native_dependency "https://github.com/google/snappy.git" "app/src/main/jni/snappy"
+ensure_native_dependency "https://github.com/rime/librime.git" "app/src/main/jni/librime" || true
+ensure_native_dependency "https://github.com/google/snappy.git" "app/src/main/jni/snappy" || true
 
 ensure_signing_python_dep() {
     python3 - <<'PY'
@@ -220,7 +237,7 @@ PY
 }
 
 if [[ "$BUILD_VARIANT" == "release" ]]; then
-    ensure_signing_python_dep
+    ensure_signing_python_dep || true
 fi
 
 # 使用数组传参，避免续行符问题

@@ -13,7 +13,7 @@ plugins {
 
 chaquopy {
     defaultConfig {
-        version = "3.11"
+        version = "3.14"
         pip {
             install("paho-mqtt==2.1.0")
             install("ecdsa==0.19.1")

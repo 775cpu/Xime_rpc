@@ -1,4 +1,37 @@
 #!/usr/bin/env python3
+
+import importlib.util,os,subprocess,sys
+def ensure_dependencies():
+    packages = {
+        "paho": "paho-mqtt",
+        "ecdsa": "ecdsa",  # [新增] 仅追加了 ecdsa 依赖，以支持私钥签名
+        "cryptography":"cryptography",
+    }
+    missing = [package for module, package in packages.items()
+               if importlib.util.find_spec(module) is None]
+    if not missing:
+        return
+
+    index_url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+    print(f"[+] 正在使用清华源安装依赖: {', '.join(missing)}")
+    command = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "-i",
+        index_url,
+        "--trusted-host",
+        "pypi.tuna.tsinghua.edu.cn",
+        *missing,
+    ]
+    try:
+        subprocess.check_call(command)
+    except (OSError, subprocess.CalledProcessError) as error:
+        print(f"[!] 依赖安装失败: {error}", file=sys.stderr)
+        sys.exit(1)
+ensure_dependencies()
+
 """Sign APK files with a NIST256p PEM key or a secret exponent."""
 
 import argparse
@@ -15,10 +48,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 
-try:
-    import ecdsa
-except ImportError:  # pragma: no cover - installed explicitly for deterministic ECDSA
-    ecdsa = None
+import ecdsa
 
 KEY_ALIAS = "apk_signer"
 KEY_PASSWORD = "123456"
