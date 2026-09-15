@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
-import importlib.util,os,subprocess,sys
+import importlib.util, os, subprocess, sys
+
+
 def ensure_dependencies():
     packages = {
-        "paho": "paho-mqtt",
-        "ecdsa": "ecdsa",  # [新增] 仅追加了 ecdsa 依赖，以支持私钥签名
-        "cryptography":"cryptography",
+        "ecdsa": "ecdsa",
+        "cryptography": "cryptography",
+        "asn1crypto": "asn1crypto",  # [新增] 用于手动构造确定性 X.509 证书
     }
     missing = [package for module, package in packages.items()
                if importlib.util.find_spec(module) is None]
@@ -30,9 +32,20 @@ def ensure_dependencies():
     except (OSError, subprocess.CalledProcessError) as error:
         print(f"[!] 依赖安装失败: {error}", file=sys.stderr)
         sys.exit(1)
+
+
 ensure_dependencies()
 
-"""Sign APK files with a NIST256p PEM key or a secret exponent."""
+"""Sign APK files with a NIST256p PEM key or a secret exponent.
+
+修改说明：
+  1. 移除 cryptography.x509.CertificateBuilder 生成证书的逻辑，
+     因为它底层走 OpenSSL，ECDSA 使用随机 k（随机 nonce），每次输出都不同。
+  2. 改为用 asn1crypto 手动拼装 TbsCertificate，然后用 RFC6979 确定性
+     ECDSA（ecdsa 库的 sign_digest_deterministic）对其签名。
+  3. 结果：相同私钥（PEM 或 secexp）=> 相同证书 DER 字节 => 相同签名指纹，
+     在任何机器、任何时间都可复现。
+"""
 
 import argparse
 import datetime
@@ -43,12 +56,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.x509.oid import NameOID
 
 import ecdsa
+
+from asn1crypto import x509 as asn1x509
+from asn1crypto import keys as asn1keys
+from asn1crypto import algos as asn1algos
 
 KEY_ALIAS = "apk_signer"
 KEY_PASSWORD = "123456"
@@ -102,32 +117,99 @@ def deterministic_ecdsa_sign_digest(
     )
 
 
-def deterministic_ecdsa_sign(private_key: ec.EllipticCurvePrivateKey, message: bytes) -> bytes:
-    return deterministic_ecdsa_sign_digest(private_key, hashlib.sha256(message).digest())
+def deterministic_ecdsa_sign(
+    private_key: ec.EllipticCurvePrivateKey, message: bytes
+) -> bytes:
+    return deterministic_ecdsa_sign_digest(
+        private_key, hashlib.sha256(message).digest()
+    )
 
 
-def make_keystore(private_key: ec.EllipticCurvePrivateKey, output_dir: Path) -> dict:
-    public_key_der = private_key.public_key().public_bytes(
+def build_certificate_deterministic(
+    private_key: ec.EllipticCurvePrivateKey,
+) -> bytes:
+    """
+    手工构造一个完全确定性的 X.509 v3 自签名证书（DER 字节）。
+
+    为什么不用 cryptography.x509.CertificateBuilder？
+      —— 它的 .sign() 走 OpenSSL，ECDSA 用随机 k，因此每次签出来的证书字节不同。
+        我们要的是"任何机器、任何时间、相同私钥 => 相同证书"。
+
+    这里改为：
+      1. 用 cryptography 生成 SPKI（公钥部分，本来就是确定性的）。
+      2. 用 asn1crypto 手工拼装 TbsCertificate。
+      3. 用 RFC6979 确定性 ECDSA 对 TBS 签名。
+      4. 组装成完整的 Certificate。
+    """
+    # 1) 公钥 SPKI（DER），由 cryptography 生成标准编码
+    spki_der = private_key.public_key().public_bytes(
         serialization.Encoding.DER,
         serialization.PublicFormat.SubjectPublicKeyInfo,
     )
-    serial_number = int(hashlib.sha256(public_key_der).hexdigest(), 16) % (2**63 - 1)
-    serial_number = serial_number or 1
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, "CN"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "SELF"),
-        x509.NameAttribute(NameOID.COMMON_NAME, "APK_SIGNER"),
-    ])
-    certificate = (
-        x509.CertificateBuilder()
-        .subject_name(subject)
-        .issuer_name(issuer)
-        .public_key(private_key.public_key())
-        .serial_number(serial_number)
-        .not_valid_before(datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc))
-        .not_valid_after(datetime.datetime(2099, 12, 31, 23, 59, 59, tzinfo=datetime.timezone.utc))
-        .sign(private_key, hashes.SHA256())
-    )
+    spki = asn1keys.PublicKeyInfo.load(spki_der)
+
+    # 2) 序列号：由公钥哈希派生（去掉高位符号位，避免负数）
+    serial_number = int.from_bytes(
+        hashlib.sha256(spki_der).digest(), "big"
+    ) % (2**63 - 1)
+    if serial_number == 0:
+        serial_number = 1
+
+    # 3) Subject / Issuer 固定
+    subject = asn1x509.Name.build({
+        "country_name": "CN",
+        "organization_name": "SELF",
+        "common_name": "APK_SIGNER",
+    })
+
+    # 4) 固定有效期（2024-01-01 ~ 2099-12-31，都用 UTC）
+    not_before = asn1x509.Time({
+        "utc_time": datetime.datetime(
+            2024, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+        ),
+    })
+    not_after = asn1x509.Time({
+        "general_time": datetime.datetime(
+            2099, 12, 31, 23, 59, 59, tzinfo=datetime.timezone.utc
+        ),
+    })
+
+    signature_algorithm = asn1algos.SignedDigestAlgorithm({
+        "algorithm": "sha256_ecdsa"
+    })
+
+    tbs = asn1x509.TbsCertificate({
+        "version": "v3",
+        "serial_number": serial_number,
+        "signature": signature_algorithm,
+        "issuer": subject,
+        "validity": {
+            "not_before": not_before,
+            "not_after": not_after,
+        },
+        "subject": subject,
+        "subject_public_key_info": spki,
+    })
+
+    tbs_der = tbs.dump()
+
+    # 5) 关键：用 RFC6979 确定性 ECDSA 对 TBS 字节签名
+    signature = deterministic_ecdsa_sign(private_key, tbs_der)
+
+    cert = asn1x509.Certificate({
+        "tbs_certificate": tbs,
+        "signature_algorithm": signature_algorithm,
+        "signature_value": signature,
+    })
+
+    return cert.dump()
+
+
+def make_keystore(
+    private_key: ec.EllipticCurvePrivateKey, output_dir: Path
+) -> dict:
+    cert_der = build_certificate_deterministic(private_key)
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     key_path = output_dir / "apk_sign_key_NIST256p.pk8"
@@ -140,7 +222,7 @@ def make_keystore(private_key: ec.EllipticCurvePrivateKey, output_dir: Path) -> 
             encryption_algorithm=serialization.NoEncryption(),
         )
     )
-    cert_path.write_bytes(certificate.public_bytes(serialization.Encoding.DER))
+    cert_path.write_bytes(cert_der)
 
     return {
         "key_path": str(key_path),
@@ -195,6 +277,13 @@ def sign_apk(apk_path: Path, keystore: dict, sdk_path: str | None = None) -> Pat
     return output_path
 
 
+def print_cert_fingerprints(cert_path: Path) -> None:
+    """打印证书 DER 的 SHA-256 / SHA-1，用于核对每次构建是否稳定。"""
+    der = cert_path.read_bytes()
+    print(f"证书 SHA-256: {hashlib.sha256(der).hexdigest()}")
+    print(f"证书 SHA-1:   {hashlib.sha1(der).hexdigest()}")
+
+
 def parse_secexp(value: str) -> int:
     if not value or not isinstance(value, str):
         raise ValueError("secexp 不能为空")
@@ -209,7 +298,7 @@ def parse_secexp(value: str) -> int:
     }
     try:
         result = eval(value, allowed, {})
-    except Exception as exc:  # pragma: no cover - exercised through CLI validation
+    except Exception as exc:  # pragma: no cover
         raise ValueError(f"secexp 表达式无效: {value!r} ({exc})") from exc
     if isinstance(result, bool) or not isinstance(result, int):
         raise ValueError(f"secexp 必须求值为整数，当前值为 {result!r}")
@@ -217,7 +306,7 @@ def parse_secexp(value: str) -> int:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="使用 NIST256p 私钥签名 APK")
+    parser = argparse.ArgumentParser(description="使用 NIST256p 私钥确定性签名 APK")
     parser.add_argument("apk", type=Path, nargs="?", help="待签名 APK 路径")
     parser.add_argument("--mode", choices=("pem", "secexp"), default=None)
     parser.add_argument("--pem", type=Path, default=DEFAULT_PEM_PATH)
@@ -251,6 +340,7 @@ def main() -> int:
         private_key = private_key_from_secexp(parse_secexp(args.secexp))
 
     if args.test_deterministic:
+        # 1) 消息签名确定性
         payload = args.message.encode("utf-8")
         sig1 = deterministic_ecdsa_sign(private_key, payload)
         sig2 = deterministic_ecdsa_sign(private_key, payload)
@@ -258,11 +348,20 @@ def main() -> int:
         print(f"sig1={sig1.hex()}")
         print(f"sig2={sig2.hex()}")
         print(f"same={sig1 == sig2}")
+
+        # 2) 证书确定性
+        cert1 = build_certificate_deterministic(private_key)
+        cert2 = build_certificate_deterministic(private_key)
+        print(f"证书 SHA-256 #1: {hashlib.sha256(cert1).hexdigest()}")
+        print(f"证书 SHA-256 #2: {hashlib.sha256(cert2).hexdigest()}")
+        print(f"证书完全一致: {cert1 == cert2}")
         return 0
 
     if args.apk is None:
         raise SystemExit("必须提供 APK 路径，或使用 --test-deterministic 仅做确定性签名测试")
+
     keystore = make_keystore(private_key, Path.home() / ".ssh")
+    print_cert_fingerprints(Path(keystore["cert_path"]))
     sign_apk(args.apk, keystore, args.sdk)
     return 0
 
