@@ -1,5 +1,6 @@
 package com.kingzcheung.xime.settings
 
+import android.content.Context
 import android.util.Log
 import java.io.File
 import kotlinx.serialization.Serializable
@@ -31,10 +32,16 @@ object RpcSettingsStore {
     private const val TAG = "RpcSettingsStore"
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
 
-    fun load(): RpcSettings {
+    fun load(context: Context): RpcSettings {
         return try {
-            val file = File(CONFIG_PATH)
-            if (file.exists()) json.decodeFromString<RpcSettings>(file.readText()) else RpcSettings()
+            val externalFile = File(CONFIG_PATH)
+            if (externalFile.exists()) {
+                json.decodeFromString<RpcSettings>(externalFile.readText())
+            } else {
+                context.assets.open("xime_rpc.json").bufferedReader().use {
+                    json.decodeFromString<RpcSettings>(it.readText())
+                }
+            }
         } catch (error: Exception) {
             Log.w(TAG, "Unable to load RPC settings", error)
             RpcSettings()

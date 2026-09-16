@@ -1,10 +1,7 @@
 package com.kingzcheung.xime.ui.settings
 
 import android.content.Intent
-import android.Manifest
-import android.app.Activity
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
@@ -40,6 +37,7 @@ import androidx.compose.material.icons.twotone.Info
 import androidx.compose.material.icons.twotone.Keyboard
 import androidx.compose.material.icons.twotone.KeyboardAlt
 import androidx.compose.material.icons.twotone.Palette
+import androidx.compose.material.icons.twotone.Security
 import androidx.compose.material.icons.twotone.Storefront
 import androidx.compose.material.icons.twotone.Straighten
 import androidx.compose.material.icons.twotone.Sync
@@ -55,7 +53,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -101,8 +98,9 @@ fun SettingsMainContent(
     onNavigateToSpeechToText: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToWebDav: () -> Unit = {},
-    onNavigateToClipboardSync: () -> Unit = {}
-    ,onNavigateToRpc: () -> Unit = {}
+    onNavigateToClipboardSync: () -> Unit = {},
+    onNavigateToRpc: () -> Unit = {},
+    onNavigateToPermissions: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -164,6 +162,18 @@ fun SettingsMainContent(
                                 as InputMethodManager
                             imm.showInputMethodPicker()
                         }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    SettingsItem(
+                        icon = Icons.TwoTone.Security,
+                        title = "权限设置",
+                        subtitle = "查看并申请 Manifest 中声明的权限",
+                        onClick = onNavigateToPermissions,
+                        showArrow = true
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(start = 56.dp),
@@ -460,26 +470,12 @@ fun SettingsMainContent(
 @Composable
 private fun PermissionRequestPanel() {
     val context = LocalContext.current
-    val activity = context as? Activity ?: return
     var backgroundEnabled by remember {
         mutableStateOf(SettingsPreferences.isBackgroundCaptureEnabled(context))
     }
     var wakeLockEnabled by remember {
         mutableStateOf(SettingsPreferences.isBackgroundCaptureWakeLockEnabled(context))
     }
-    val requests = listOf(
-        "相机" to listOf(Manifest.permission.CAMERA),
-        "麦克风" to listOf(Manifest.permission.RECORD_AUDIO),
-        "前台位置" to listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-        "后台位置" to listOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
-        "蓝牙" to listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
-        "通知" to listOf(Manifest.permission.POST_NOTIFICATIONS),
-        "图片" to listOf(Manifest.permission.READ_MEDIA_IMAGES),
-        "视频" to listOf(Manifest.permission.READ_MEDIA_VIDEO),
-        "音频文件" to listOf(Manifest.permission.READ_MEDIA_AUDIO),
-        "电话状态" to listOf(Manifest.permission.READ_PHONE_STATE),
-        "旧版存储" to listOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-    )
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -528,53 +524,6 @@ private fun PermissionRequestPanel() {
                     }
                 }
             )
-        }
-        Text("动态权限", style = MaterialTheme.typography.labelLarge)
-        Text(
-            "点击后由 Android 系统弹窗确认；灰色按钮表示当前版本不适用。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        requests.chunked(2).forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                row.forEach { (label, permissions) ->
-                    val supported = permissions.any { Build.VERSION.SDK_INT >= 23 &&
-                        (it != Manifest.permission.READ_MEDIA_IMAGES &&
-                            it != Manifest.permission.READ_MEDIA_VIDEO &&
-                            it != Manifest.permission.READ_MEDIA_AUDIO || Build.VERSION.SDK_INT >= 33) }
-                    OutlinedButton(
-                        onClick = {
-                            val applicable = permissions.filter { permission ->
-                                Build.VERSION.SDK_INT >= 23 &&
-                                    !(permission.startsWith("android.permission.READ_MEDIA_") && Build.VERSION.SDK_INT < 33) &&
-                                    !(permission == Manifest.permission.ACCESS_BACKGROUND_LOCATION && Build.VERSION.SDK_INT < 29) &&
-                                    !(permission == Manifest.permission.POST_NOTIFICATIONS && Build.VERSION.SDK_INT < 33)
-                            }
-                            if (applicable.isNotEmpty()) {
-                                androidx.core.app.ActivityCompat.requestPermissions(activity, applicable.toTypedArray(), 7100 + label.hashCode())
-                            }
-                        },
-                        enabled = supported,
-                        modifier = Modifier.weight(1f)
-                    ) { Text(label) }
-                }
-                if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${context.packageName}")))
-                }
-            }) { Text("所有文件") }
-            OutlinedButton(onClick = {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
-                }
-            }) { Text("安装权限") }
         }
     }
 }

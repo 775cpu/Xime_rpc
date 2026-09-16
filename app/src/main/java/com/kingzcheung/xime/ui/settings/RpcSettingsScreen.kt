@@ -30,13 +30,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.kingzcheung.xime.settings.RpcSettings
 import com.kingzcheung.xime.settings.RpcSettingsStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RpcSettingsContent(onBack: () -> Unit) {
-    val initial = remember { RpcSettingsStore.load() }
+    val context = LocalContext.current
+    val initial = remember { RpcSettingsStore.load(context) }
     var httpEnabled by remember { mutableStateOf(initial.httpEnabled) }
     var httpPort by remember { mutableStateOf(initial.httpPort.toString()) }
     var httpHost by remember { mutableStateOf(initial.httpHost) }

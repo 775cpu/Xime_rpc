@@ -24,7 +24,7 @@ class SettingsPreferencesTest {
     @Test
     fun currentSchemaUsesDefaultThenMigratesLegacy() {
         // 引擎未初始化（测试环境）且无历史数据时使用默认方案
-        assertEquals("wubi86", SettingsPreferences.getCurrentSchema(context))
+        assertEquals("pinyin_simp", SettingsPreferences.getCurrentSchema(context))
         // 模拟旧版本 SharedPreferences 数据：一次性迁移读取
         context.getSharedPreferences("kime_settings", Context.MODE_PRIVATE)
             .edit()

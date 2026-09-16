@@ -149,7 +149,7 @@ object SettingsPreferences {
         }
         val legacy = prefs.getString(KEY_CURRENT_SCHEMA, null)
         if (!legacy.isNullOrBlank()) return legacy
-        return "wubi86"
+        return "pinyin_simp"
     }
 
     fun setCurrentSchema(context: Context, schemaId: String) {
