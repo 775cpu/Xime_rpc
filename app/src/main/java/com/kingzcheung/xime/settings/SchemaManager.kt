@@ -783,7 +783,7 @@ object SchemaManager {
             Log.e(TAG, "Failed to read custom.yaml", e)
         }
 
-        return listOf("pinyin_simp", "wubi86", "wubi86_pinyin", "t9_pinyin")
+        return listOf("pinyin_simp", "handwriting")
     }
 
     fun setEnabledSchemas(context: Context, schemaIds: List<String>) {
