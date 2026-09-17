@@ -111,6 +111,7 @@ class MemoryLogProxy:
 
 
 def start(log_path):
+    global mqtt_server,http_server
     memory_sink = MemoryLogProxy()
     file_sink = None
     if log_path:
@@ -141,16 +142,15 @@ def start(log_path):
         config = load_rpc_config()
         server = thread = None
         if config.get('http_enabled', True):
-            server, thread = server_http.start_rpc_server(
+            http_server, thread = server_http.start_rpc_server(
                 port=int(config.get('http_port', 1144)),
                 ip=str(config.get('http_host', '0.0.0.0')),
                 key=str(config.get('http_key', '')),
                 globals=globals(),
                 locals=locals(),
             )
-        mqtt_server = server_mqtt.start(config) if config.get("mqtt_enabled", False) else None
-        print(f"[app.py] rpc config loaded, mqtt={mqtt_server is not None}")
-        print(f"[app.py] HTTP={server} MQTT={mqtt_server} thread={thread}")
+        mqtt_server = server_mqtt.start(config,globals=globals()) if config.get("mqtt_enabled", False) else None
+        print(f"[app.py] {config} loaded, HTTP={http_server} MQTT={mqtt_server} thread={thread}")
         return True
     except Exception:
         traceback.print_exc()
