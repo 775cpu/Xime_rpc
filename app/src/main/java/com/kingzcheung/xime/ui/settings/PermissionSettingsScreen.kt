@@ -61,13 +61,10 @@ fun PermissionSettingsContent(onBack: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // 用一个可观察的刷新计数驱动全量重算
     var refreshKey by remember { mutableStateOf(0) }
 
-    // 只解析一次当前应用声明的运行时权限
     val permissions = remember { findRuntimePermissions(context) }
 
-    // 运行时权限的授权状态，用 State 保存，UI 自动响应
     val grantedState = remember {
         mutableStateMapOf<String, Boolean>().apply {
             permissions.forEach { item ->
@@ -76,7 +73,6 @@ fun PermissionSettingsContent(onBack: () -> Unit) {
         }
     }
 
-    // 特殊权限的授权状态，同样用 State 保存
     val specialGranted = remember {
         mutableStateMapOf(
             "overlay" to Settings.canDrawOverlays(context),
@@ -87,7 +83,12 @@ fun PermissionSettingsContent(onBack: () -> Unit) {
         )
     }
 
-    // 每次 refreshKey 变化时重新计算所有权限状态
+    // 顺序请求的状态机
+    var currentPermission by remember { mutableStateOf<String?>(null) }
+    var pendingPermissionQueue by remember { mutableStateOf<List<String>>(emptyList()) }
+    var launchTrigger by remember { mutableStateOf(0) }
+    var isRequesting by remember { mutableStateOf(false) }
+
     LaunchedEffect(refreshKey) {
         permissions.forEach { item ->
             grantedState[item.permission] = isGranted(context, item.permission)
@@ -99,17 +100,33 @@ fun PermissionSettingsContent(onBack: () -> Unit) {
         specialGranted["install"] = isInstallUnknownAppsGranted(context)
     }
 
-    // 运行时权限请求器
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { refreshKey++ }
+    ) {
+        refreshKey++
+        // 一个权限请求回调后，从队列取出下一个
+        val queue = pendingPermissionQueue
+        if (queue.isNotEmpty()) {
+            currentPermission = queue.first()
+            pendingPermissionQueue = queue.drop(1)
+            launchTrigger++
+        } else {
+            currentPermission = null
+            isRequesting = false
+        }
+    }
 
-    // 系统设置页启动器，用于特殊权限
+    // 由 launchTrigger 驱动实际 launch，避免在 launcher 回调里引用自身
+    LaunchedEffect(launchTrigger) {
+        if (launchTrigger > 0) {
+            currentPermission?.let { permissionLauncher.launch(arrayOf(it)) }
+        }
+    }
+
     val settingsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { refreshKey++ }
 
-    // 从系统设置页返回时自动刷新
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) refreshKey++
@@ -118,32 +135,32 @@ fun PermissionSettingsContent(onBack: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // 组装权限到权限组的映射，用于批量请求时去重
     val groupOfPermission = remember(permissions) {
         permissions.associate { it.permission to it.groupKey }
     }
 
-    // 发起运行时权限请求
+    // 核心：顺序请求，一次只发一个权限
     fun launchPermissionRequest(candidates: List<String>) {
         val applicable = candidates
             .asSequence()
-            // 后台位置不能通过普通权限弹窗申请
             .filter { it != Manifest.permission.ACCESS_BACKGROUND_LOCATION }
-            // 当前系统版本适用、且尚未授权
             .filter { isApplicable(it) && !isGranted(context, it) }
-            // 同一权限组只请求一个，避免系统合并弹窗后 UI 仍显示未授权
             .distinctBy { groupOfPermission[it] ?: permissionGroupKey(it) }
             .toList()
 
         if (applicable.isEmpty()) {
-            // 没有可请求的，也刷新一次，确保 UI 与真实状态一致
             refreshKey++
-        } else {
-            permissionLauncher.launch(applicable.toTypedArray())
+            return
         }
+
+        if (isRequesting) return
+
+        isRequesting = true
+        currentPermission = applicable.first()
+        pendingPermissionQueue = applicable.drop(1)
+        launchTrigger++
     }
 
-    // 打开系统设置页，失败时回退到应用详情页
     fun launchSettings(action: String) {
         val primary = Intent(action, "package:${context.packageName}".toUri())
         try {
@@ -157,12 +174,15 @@ fun PermissionSettingsContent(onBack: () -> Unit) {
         }
     }
 
-    // 单项点击逻辑
     fun onPermissionClicked(permission: String) {
+        // 用户手动点击时取消正在进行的批量队列
+        pendingPermissionQueue = emptyList()
+        currentPermission = null
+        isRequesting = false
+
         if (permission == Manifest.permission.ACCESS_BACKGROUND_LOCATION &&
             !isGranted(context, permission)
         ) {
-            // 后台位置只能去系统设置里手动授权
             launchSettings(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
             return
         }
@@ -193,13 +213,19 @@ fun PermissionSettingsContent(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "系统会按权限组合并弹窗；后台位置、悬浮窗等特殊权限需要进入系统设置单独授权。",
+                "系统会按权限组依次弹窗；后台位置、悬浮窗等特殊权限需要进入系统设置单独授权。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             OutlinedButton(
-                onClick = { launchPermissionRequest(permissions.map { it.permission }) }
+                onClick = {
+                    // 清掉旧队列再开始新的批量
+                    pendingPermissionQueue = emptyList()
+                    currentPermission = null
+                    isRequesting = false
+                    launchPermissionRequest(permissions.map { it.permission })
+                }
             ) {
                 Icon(Icons.TwoTone.Security, contentDescription = null)
                 Text("申请全部可动态申请权限")
@@ -301,7 +327,6 @@ private fun findRuntimePermissions(context: Context): List<RuntimePermission> {
             context.packageManager.getPermissionInfo(permission, 0)
         }.getOrNull() ?: return@mapNotNull null
 
-        // 只保留运行时（危险）权限，低四位等于 1
         if (info.protectionLevel and 0xF != PROTECTION_DANGEROUS) {
             return@mapNotNull null
         }
@@ -372,10 +397,6 @@ private fun permissionDescription(permission: String): String = when (permission
     else -> permission.substringAfterLast('.')
 }
 
-/**
- * 把权限映射到系统权限组，用于批量请求时去重。
- * 同一权限组系统只会弹一个框，如果不去重，会出现“点了没弹框”的现象。
- */
 private fun permissionGroupKey(permission: String): String = when (permission) {
     Manifest.permission.ACCESS_FINE_LOCATION,
     Manifest.permission.ACCESS_COARSE_LOCATION,
