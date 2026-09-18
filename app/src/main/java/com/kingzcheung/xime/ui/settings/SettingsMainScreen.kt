@@ -184,9 +184,9 @@ fun SettingsMainContent(
                     SettingsToggleItem(
                         icon = Icons.TwoTone.ToggleOn,
                         title = "隐藏桌面图标",
-                        subtitle = "默认隐藏；关闭后重新显示启动图标",
+                        subtitle = "关闭后重新显示启动图标",
                         checked = launcherIconHidden,
-                        showArrow = false,
+                        showArrow = true,
                         onCheckedChange = { hidden ->
                             launcherIconHidden = hidden
                             SettingsPreferences.setLauncherIconHidden(context, hidden)
