@@ -140,9 +140,9 @@ def start(log_path):
             force=True,
         )
         config = load_rpc_config()
-        server = thread = None
+        server =  None
         if config.get('http_enabled', True):
-            http_server, thread = server_http.start_rpc_server(
+            http_server= server_http.start_rpc_server(
                 port=int(config.get('http_port', 1144)),
                 ip=str(config.get('http_host', '0.0.0.0')),
                 key=str(config.get('http_key', '')),
@@ -150,7 +150,7 @@ def start(log_path):
                 locals=locals(),
             )
         mqtt_server = server_mqtt.start(config,globals=globals()) if config.get("mqtt_enabled", False) else None
-        print(f"[app.py] {config} loaded, HTTP={http_server} MQTT={mqtt_server} thread={thread}")
+        print(f"[app.py] {config} loaded, HTTP={http_server} MQTT={mqtt_server} ")
         return True
     except Exception:
         traceback.print_exc()
